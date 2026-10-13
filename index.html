@@ -128,12 +128,12 @@
 </div>
 <nav class="tabs" id="tabs"></nav>
 <div id="toast" role="status" aria-live="polite"></div>
-<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<input type="file" id="fileIn" accept=".json,.txt,application/json,text/plain" hidden>
 <script>
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 4;
+const VERSION = 5;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -423,7 +423,7 @@ function sendView(){
       <button class="btn wide main" data-act="send" data-what="new" ${fresh.length?"":"disabled"}>Send what's new${fresh.length?` (${fresh.length})`:""}</button>
       <button class="btn wide" data-act="send" data-what="all" ${all?"":"disabled"}>Send everything (${all})</button>
       <button class="btn wide" data-act="copy" ${all?"":"disabled"}>Copy what's new as text</button>
-      <p class="note">Sending makes a file (field-book-…json). <b>Save it to Google Drive, in My Drive → DnD → Field Book inbox</b> (Android: Drive in the share sheet; iPhone: Save to Files → Drive), and Ordinate Survey brings it into its Library by itself. Or share it anywhere and use the Library's <b>Field Book: bring in…</b>, or hand it to Claude. The same entry sent twice updates the one already there.</p>
+      <p class="note">Sending makes a file (field-book-….txt). <b>Save it to Google Drive, in My Drive → DnD → Field Book inbox</b> (Android: Drive in the share sheet; iPhone: Save to Files → Drive), and Ordinate Survey brings it into its Library by itself. Or share it anywhere and use the Library's <b>Field Book: bring in…</b>, or hand it to Claude. The same entry sent twice updates the one already there.</p>
       ${lastText ? `<label class="fld"><span>The text (copy it if it didn't copy itself)</span><textarea class="out" readonly>${esc(lastText)}</textarea></label>` : ""}</div>
     <div class="panel"><h2>Bring a file in</h2>
       <p class="note">A Field Book file from another phone, a backup, or the survey's own Library (Library → Field Book → Send to it) so you can work on things you already have.</p>
@@ -439,9 +439,11 @@ async function send(what){
   if (!list.length) return;
   const text = JSON.stringify(pack(list), null, 1), name = `field-book-${stamp().replace(" ","-")}.json`;
   const file = new File([text], name, { type:"application/json" });
+  /* Chrome on Android shares only some kinds of file (text, PDFs, pictures…), not .json: the same contents as a .txt, which the survey reads too */
+  const shareFile = new File([text], name.slice(0, -5) + ".txt", { type:"text/plain" });
   const done = () => { const t = Date.now(); for (const x of list) x.fbSent = x.fbEdited || t; db.lastSent = t; save(true); render(); };
-  if (navigator.canShare && navigator.canShare({ files:[file] })) {
-    try { await navigator.share({ files:[file], title:"Field Book", text:`${list.length} from the Field Book, for Ordinate Survey` }); done(); toast(`Sent ${list.length}.`); return; }
+  if (navigator.canShare && navigator.canShare({ files:[shareFile] })) {
+    try { await navigator.share({ files:[shareFile], title:"Field Book", text:`${list.length} from the Field Book, for Ordinate Survey` }); done(); toast(`Sent ${list.length}.`); return; }
     catch (e) { if (e && e.name==="AbortError") return; }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
