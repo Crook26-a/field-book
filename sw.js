@@ -1,6 +1,6 @@
 // Service worker: caches the whole app so it opens instantly, even offline.
-const CACHE = "field-book-v5";
-const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
+const CACHE = "field-book-v6";
+const ASSETS = ["./", "./index.html", "./survey.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
 self.addEventListener("install", e => {
   // Fetch each asset with cache:"reload" so a new version never re-caches a stale

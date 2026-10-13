@@ -111,6 +111,8 @@
 
   .panel { background: var(--card); border: 1px solid var(--rule); border-radius: 3px; padding: 12px 12px 4px; margin: 0 0 14px; }
   .panel h2 { margin: 0 0 6px; font-size: 19px; font-weight: normal; }
+  /* the version, in the corner: it changes with every update */
+  #ver { position: fixed; top: calc(3px + env(safe-area-inset-top)); right: 7px; z-index: 30; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 10.5px; color: var(--ink-faint); pointer-events: none; }
   #toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 20; max-width: 92vw;
     background: var(--ink); color: var(--paper-lit); padding: 10px 14px; border-radius: 3px; font-size: 14.5px; opacity: 0; pointer-events: none; transition: opacity .2s; }
   #toast.on { opacity: 1; }
@@ -128,12 +130,16 @@
 </div>
 <nav class="tabs" id="tabs"></nav>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="ver" aria-hidden="true"></div>
 <input type="file" id="fileIn" accept=".json,.txt,application/json,text/plain" hidden>
+<script>/* what survey.js asks the phone for: its library, and the level to roll at */
+window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, tables:[] }), level: () => ui.level || 3 };</script>
+<script src="survey.js"></script>
 <script>
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 5;
+const VERSION = 6;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -150,118 +156,9 @@ const COINS = [["cp","Copper"],["sp","Silver"],["ep","Electrum"],["gp","Gold"],[
 const ABILS = [["str","Str"],["dex","Dex"],["con","Con"],["int","Int"],["wis","Wis"],["cha","Cha"]];
 const DISPS = [["","Any"],["enemy","Enemy"],["neutral","Neutral"],["ally","Potential ally"]];
 
-/* ── the survey's own roll tables (Roll tab → Someone to meet), copied as they are ── */
-const GEN_FIRST = ["Marco","Lucia","Tomas","Ines","Rafa","Bianca","Teodor","Sofia","Emilio","Carmen","Davi","Ysolde","Orsino","Paloma","Benedek",
-  "Ada","Bertil","Cass","Dorian","Esme","Fen","Gil","Hollis","Ivo","Juno","Kit","Lark","Mira","Nell","Oskar","Perrin","Quill","Rosa","Sable","Tamsin","Uri","Vesna","Wren","Yara","Zev",
-  "Alba","Amadeo","Anouk","Ansel","Arlo","Bastian","Beatriz","Brisa","Calla","Cato","Celeste","Cormac","Dalia","Delphine","Dmitri",
-  "Edda","Elio","Enzo","Fabien","Faye","Flora","Gaspard","Greer","Hale","Hester","Ilsa","Isidro","Jessa","Joaquin","Kasimir",
-  "Leda","Lior","Lorca","Lucan","Maren","Mateo","Nadia","Noor","Odile","Otto","Petra","Pim","Rhea","Rio","Rocco",
-  "Ronan","Salome","Silas","Soren","Talia","Thea","Tobin","Ulla","Vale","Vito","Wilhelmina","Xander","Yusuf","Zara","Brannoc"];
-const GEN_FAMILY = ["Corrado","Vela","Ruiz","Moretti","Santos","Delacroix","Brandt","Varga","Castell","Amaro","Lisboa","Pereira","Rossi","Duarte","Fennick",
-  "Ashgrove","Blackwater","Coldharbor","Driftwood","Embergate","Farrow","Gullhaven","Holloway","Ironside","Keel","Larkspur","Marrow","Netherby","Oakshade","Penrose","Quarry","Saltmarsh","Tidewell","Underhill","Wexley",
-  "Albarran","Anselmi","Ashby","Barrow","Bellmare","Benevento","Blackfin","Cabral","Carrow","Castellan","Coldwell","Coral","Corvino","Crane","Dellamar",
-  "Dunmore","Esteve","Falconer","Fairwind","Ferreira","Fiore","Galloway","Graves","Greywater","Hartwell","Herrera","Hookham","Inglis","Jaramillo","Kettle",
-  "Lachance","Lantana","Lowtide","Maddox","Marin","Medina","Montoya","Mossgrave","Navarro","Nettlefield","Ortega","Osprey","Palladino","Penhallow","Quintero",
-  "Ravel","Redfern","Rookwood","Sandoval","Seabright","Silvanus","Sorrento","Stormcrow","Thorne","Torres","Trevelyan","Valdez","Wavecrest","Whitlock","Yarrow",
-  "Zamora","Abernathy","Brightly","Calder","Dunlin"];
-const GEN_NICK = ["Saltbeard","Two-Knives","Lucky","Gull","Patch","Old Barnacle","Quick","Halfpenny","Red","the Quiet"];
-const GEN_SPECIES = ["Human","Elf","Dwarf","Halfling","Gnome","Orc","Tiefling","Dragonborn","Goliath","Aasimar"];
-const GEN_LOOK = ["a scar through one eyebrow","salt-white hair tied back with twine","a coat far too fine for this place","tattoos of ships climbing both arms",
-  "one gold tooth they show off constantly","sunburned and squinting","an eyepatch they keep lifting to check things","a parrot feather in their hat",
-  "ink-stained fingers and a satchel of papers","a limp they never explain","jewelry made of shells and sea-glass","a missing finger on their left hand",
-  "boots that squelch with every step","a nervous habit of counting coins","a weathered face and kind eyes","freckles and a shaved head",
-  "a cloak patched from old sails","the smell of tar and smoke","a fresh black eye","an immaculate uniform that doesn't quite fit",
-  "a braid threaded with fishhooks","spectacles mended with wire","a sunburst of freckles across their nose","a coat with every button mismatched",
-  "hands calloused and tar-black","a wide-brimmed hat pulled low","a bright scarf knotted at the throat","a necklace of shark teeth",
-  "a gap where two front teeth should be","a shaved head with a tattooed compass rose","an old sword they clearly can't use","bare feet and rolled-up trousers",
-  "a heavy gold earring in one ear","paint flecks on their sleeves","a nose that's been broken more than once","one arm in a sling",
-  "a long grey beard tucked into their belt","silver rings on every finger","a hood they never lower","a burn scar across one hand",
-  "clothes several sizes too big","a fresh haircut and a nervous grin","a small cat riding in their satchel","eyes of two different colors",
-  "a weathered three-cornered hat","an apron covered in fish scales","a walking stick carved like a serpent","a fine embroidered vest, badly stained",
-  "a sunhat woven from palm leaves","a tattoo of a name they won't explain"];
-const GEN_VOICE = ["speaks in a whisper, as if someone's listening","laughs at their own jokes","quotes old sea sayings for everything","never finishes a sentence",
-  "talks to an animal on their shoulder more than to you","asks a question back for every question","calls everyone 'friend' a little too warmly","haggles over everything, even directions",
-  "sings under their breath","uses long words slightly wrong","is blunt to the point of rude","stammers until they trust you",
-  "keeps glancing at the exits","names every tool and weapon they own","speaks only in short, flat sentences","is delighted by everything the crew says",
-  "hums sea shanties between sentences","speaks very slowly, choosing each word","talks with their hands","apologizes constantly",
-  "tells long stories that go nowhere","swears creatively but never cruelly","refers to themself in the third person","answers questions with proverbs",
-  "laughs too loudly and too long","speaks formally, like a court clerk","gossips about everyone","interrupts constantly",
-  "whistles when nervous","has a thick accent from somewhere far away","repeats the last word you said","uses sailing terms for everything",
-  "speaks in a deep, booming voice","is always eating something","makes terrible puns","is suspicious of every question",
-  "flatters shamelessly","talks about the weather no matter what","pauses dramatically before answering","mixes up names, including their own",
-  "sighs heavily before every answer","compares everything to their home island","counts on their fingers while they talk","is very precise about numbers",
-  "speaks so softly you have to lean in","brags about a cousin who's famous somewhere","is quick to take offense and quicker to forgive","calls the crew by made-up nicknames",
-  "asks about everyone's family","talks to the sea as if it's listening"];
-/* wants and secrets stay general, so they fit any island, not just this campaign's */
-const GEN_WANTS = {
-  enemy:["the crew's ship, by fair means or foul","whatever the crew is carrying","to lead the crew into a trap","the crew gone before they find what's hidden here",
-    "a hostage worth a ransom","to scare the crew off this island","to prove they're tougher than the newcomers","revenge on someone the crew works for",
-    "to sell the crew's whereabouts to a rival","a map the crew has, or might have","to take control of the local trade","to frame the crew for their own crime",
-    "to recruit one of the crew into their gang","to sink a rival's ship, using the crew to do it","tribute from anyone who lands here","to steal the crew's supplies in the night",
-    "to settle an old score with someone on the crew","to keep a dangerous secret buried","to bully the locals into obeying them","a rare beast, alive, to sell",
-    "to plunder a shrine the locals protect","to win a wager by humiliating the crew","to lure ships onto the rocks","to break a prisoner out of the crew's custody",
-    "to poison a rival at the next feast","the crew's captain, in chains","to wreck a peace that's bad for business","a weapon of legend said to be nearby",
-    "to turn the locals against the crew","to be feared by everyone on the island","to smuggle something deadly past the crew","to collect a bounty on one of the crew",
-    "to take the crew's discoveries and claim them as their own","to destroy the evidence of an old crime","the land the locals live on","to steal a holy relic",
-    "to cut off the island's fresh water and sell it back","to spy on the crew for someone powerful","to buy the crew's trust, then betray them","a treasure they don't know is cursed",
-    "to sabotage the crew's ship before it sails","to start a feud between two families","to escape justice for something terrible","to take over the crew's next job",
-    "to silence a witness","to raid the next village on the coast","to capture someone for a mysterious buyer","to spread false rumors about the crew",
-    "power, and anything that brings more of it","to see the crew fail, just because"],
-  neutral:["to be paid, and to be left alone","news from home","a fair trade, and nothing more","to finish their work before nightfall",
-    "someone to carry a message home","to know who sent the crew","a drink and a good story","to stay out of whatever trouble the crew brings",
-    "a rare item they've heard the crew might have","to keep their own secret safe","to sell their catch before it spoils","a hand with a heavy job, for a fair wage",
-    "to know what lies beyond the horizon","quiet, and the crew's ship gone by morning","to win at cards, just once","a new pair of boots",
-    "to find out what the crew is really after","an apprentice who can follow orders","a buyer for something they found on the beach","to settle a dispute without bloodshed",
-    "to be remembered in a song","a ride to the next island, if it's on the way","to collect a debt someone owes them","the weather to hold for one more day",
-    "their missing goat back","to learn a word of the crew's language","someone to taste their cooking and be honest","good timber at a fair price",
-    "to keep their family out of the crew's business","a strange trinket identified","to swap stories about the sea","to know whether the crew can be trusted",
-    "to be paid in coin, not promises","a healer for a sick relative","to finish a map they started years ago","rumors about other islands",
-    "to deliver a package without asking what's in it","to retire somewhere quiet","the crew's opinion of their poetry","to hear what the crew saw on their travels",
-    "to keep the peace in their corner of the world","an extra pair of hands for the harvest","to see a real ship up close","to be left out of any fighting",
-    "to trade gossip for gossip","a lucky charm that actually works","to know if the crew has seen a certain ship","to sell the crew a map of doubtful quality",
-    "to keep their shop open one more season","an honest answer to one question"],
-  ally:["passage off this island","help finding a lost sibling","someone to stand up to the bullies here","a crew worth joining",
-    "protection for their village","to map the coast with someone who knows how","to warn the crew about what's ahead","a friend who won't sell them out",
-    "to repay a kindness someone once did them","to see the island freed from its troubles","help rescuing a friend held captive","to prove themselves to someone who doubted them",
-    "to return a lost heirloom to its owner","to learn to fight","a share of the adventure, not the treasure","help breaking a curse on their family",
-    "to get a message to someone far away","a cure for a sickness in their village","to see their home again","someone to believe their strange story",
-    "to guide the crew somewhere only they know","to pay back a debt to the crew","help repairing a damaged boat","to expose a liar in a position of power",
-    "a safe place for people fleeing danger","to apprentice under one of the crew","to stop a war before it starts","to bring a criminal to justice",
-    "to find out what happened to their parents","to protect a sacred place from looters","to trade what they know for a little help","a fresh start somewhere new",
-    "to warn the crew about a traitor","help carrying supplies to someone in need","to make peace with an old enemy","company on a dangerous road",
-    "to keep a promise they made to someone dying","to show the crew the island's hidden wonders","help standing up to a cruel employer","to free an animal kept in a cage",
-    "to recover something stolen from them","to be brave, just once","a crew that treats people fairly","to sail anywhere, as long as it's away from here",
-    "help hiding from someone who's hunting them","to warn ships away from a dangerous reef","someone to keep their secret safe","to make their family proud",
-    "to join the crew's next voyage","to give the crew a gift they've been saving"]
-};
-const GEN_SECRET = ["isn't who they say they are","owes money to dangerous people","knows a hidden route nobody else does","is hiding a stolen map",
-  "buried something valuable nearby","is far stronger than they look","is wanted somewhere else under another name","is planning to leave tonight, with or without help",
-  "has a sickness they're hiding","overheard the crew's plans","is afraid of something everyone else ignores","is in love with someone they shouldn't be",
-  "survived a shipwreck no one else did","works for someone they won't name","has a twin no one here knows about","can't read, and hides it well",
-  "once did something terrible and has never told anyone","is nobility in hiding, far from home","deserted from an army or a navy","has magic they've never been taught to use",
-  "knows where a body is buried","is spying on the crew for someone else","is the one who started the trouble here","stole the clothes they're wearing",
-  "is much older than they look","dreams of the same strange place every night","has a price on their head","is the last of their family",
-  "is being blackmailed","is carrying a cursed object without knowing it","has already sold out someone the crew trusts","lost a bet and owes a strange favor",
-  "knows something about one of the crew's past","is protecting a child who isn't theirs","is a far better fighter than they let on","forged the papers they carry",
-  "has a hidden stash of coins","is terrified of the sea but hides it","sends messages to someone at night","was once a pirate",
-  "knows the local leader is a fraud","has a second family on another island","can't help telling one lie a day","found something they can't explain and is scared of it",
-  "isn't actually from this island","has never hurt anyone and is afraid they'll have to","owes their life to a monster","was paid to lie about what they saw",
-  "nearly died once and came back changed","knows more about the crew than they should"];
-/* a short backstory for anyone: where they come from, how they came to this, and what they hope for. Plain and
-   setting-free on purpose, a start to make your own */
-const GEN_ORIGIN = ["grew up on a fishing boat, the youngest of seven","was a farmer's child from the hill country","was raised in a temple orphanage and ran away at twelve",
-  "was born to a family of traveling players","comes from a mining town that isn't there any more","served three years as a soldier in someone else's war",
-  "was apprenticed to a blacksmith and never finished","grew up in the back rooms of a smugglers' inn","was a ship's cook before the ship went down",
-  "is the black sheep of a once-wealthy house","learned to read from a disgraced scholar","grew up on the docks, running errands for coin"];
-const GEN_TURN = ["fell in with this crew after a debt went bad","joined for the pay and stayed for the company","was pressed into it and never found a way out",
-  "lost everything in a fire and needed work, any work","followed an old friend in, and that friend is dead now","is here to pay off a brother's debt",
-  "thought it was honest work at first","was promised a share that has never come","is hiding from the law under a borrowed name",
-  "owes their life to whoever leads this lot","took the job to get close to someone they mean to hurt","drifted into it one bad decision at a time"];
-const GEN_HOPE = ["wants to buy a boat of their own","means to quit after one more job","sends most of their pay home to a sick parent",
-  "dreams of a quiet farm and a dog","wants their name cleared","is saving to find a sister who was sold off years ago",
-  "would trade everything for a second chance","wants to be feared, just once","hopes nobody from home ever learns what they do",
-  "is planning to betray the others and take the lot","keeps a letter they've never had the nerve to send","wants to see the open sea before they die"];
-const ALIGNMENTS = ["Lawful Good","Neutral Good","Chaotic Good","Lawful Neutral","Neutral","Chaotic Neutral","Lawful Evil","Neutral Evil","Chaotic Evil"];
+/* ── the survey's own roll tables and its roller: survey.js, built from Ordinate Survey's index.html by its Tools/build-fieldbook.ps1, so
+   people roll here exactly as they do there (class stat block by level, hit points, a caster's spells and slots, weapons) ── */
+const { GEN_FIRST, GEN_FAMILY, GEN_NICK, GEN_SPECIES, GEN_LOOK, GEN_VOICE, GEN_WANTS, GEN_SECRET, ALIGNMENTS } = Survey;
 
 const pickOne = a => a[Math.floor(Math.random()*a.length)];
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -269,17 +166,14 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&
 const $ = s => document.querySelector(s);
 const uid = p => `${p}_fb${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const rollName = () => `${pickOne(GEN_FIRST)}${Math.random()<.25 ? ` "${pickOne(GEN_NICK)}"` : ""} ${pickOne(GEN_FAMILY)}`;
-const rollBackstory = () => `${cap(pickOne(GEN_ORIGIN))}, and ${pickOne(GEN_TURN)}. ${cap(pickOne(GEN_HOPE))}.`;
+const rollBackstory = () => Survey.genBackstory();
 /* an alignment that suits the attitude (the survey's own weighting): enemies lean evil, allies good, every one possible */
-function rollAlignment(disp){
-  const good = ALIGNMENTS.slice(0,3), mid = ALIGNMENTS.slice(3,6), evil = ALIGNMENTS.slice(6);
-  return pickOne(disp==="enemy" ? [...evil,...evil,...evil,...mid] : disp==="ally" ? [...good,...good,...good,...mid] : disp==="neutral" ? [...mid,...mid,...mid,...good,...evil] : ALIGNMENTS);
-}
+const rollAlignment = d => Survey.rollAlignment(d);
 const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"").toLowerCase()]; return g==null ? "" : "~" + (g*(potion?0.5:1)).toLocaleString() + " gp"; };
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], lastSent:o.lastSent||0, theme:o.theme||"" }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -300,7 +194,9 @@ function applyTheme(){ const dark = db.theme ? db.theme==="dark" : matchMedia("(
 $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("dark") ? "light" : "dark"; save(); applyTheme(); };
 
 /* ── what's on screen ── */
-const ui = { tab:"loot", open:null, draft:null, q:"", disp:"" };     // open: an entry's id; draft: { cat, x } not added yet
+const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", species:"", align:"" };     // open: an entry's id; draft: { cat, x } not added yet
+const ROLL_KEYS = ["disp","level","role","species","align"];
+Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
 const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"] };
 const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x.id===ui.open) : null;
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
@@ -373,11 +269,27 @@ function itemForm(x){
     ${TA(x,"notes","Notes","Where it turns up, who wants it…",3)}`;
 }
 
-function fightsWord(v){ if (!v || v==="block") return ""; if (v==="self") return "self"; return /^srd:/.test(v) ? v.slice(4).split("-").map(cap).join(" ") : v; }
+function fightsWord(v){ if (!v || v==="block") return ""; if (v==="self") return "self"; const m = Survey.SRD_FOES.find(f=>f.id===v); return m ? m.name : /^srd:/.test(v) ? v.slice(4).split("-").map(cap).join(" ") : v; }
+/* the roller, as on the survey's Roll tab (Someone to meet): level, attitude, class, species, alignment */
+function rollPanel(){
+  const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(v)===String(cur??"")?"selected":""}>${esc(l)}</option>`;
+  return `<div class="panel" style="padding-bottom:2px"><p class="lab" style="margin:0 0 8px">Roll someone, the way the survey does</p>
+    <div class="row"><label class="fld" style="flex:.6"><span>Level</span><input type="number" inputmode="numeric" min="1" max="20" data-ui="level" value="${esc(ui.level)}"></label>
+      <label class="fld"><span>Attitude</span><select data-ui="disp">${DISPS.map(([v,l])=>opt(v, l, ui.disp)).join("")}</select></label></div>
+    <div class="row"><label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>
+      <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>
+    <label class="fld"><span>Alignment</span><select data-ui="align">${opt("", "Any: one that fits the attitude", ui.align)}${ALIGNMENTS.map(a=>opt(a, a, ui.align)).join("")}</select></label>
+    <button class="btn wide main" data-roll="whole">🎲 Roll someone</button>
+    <p class="note">Their level picks an SRD stat block for their class and rolls their hit points; a caster gets their class's spells and slots (2024 tables), and they get their own weapons. Roll again as often as you like before you add them.</p></div>`;
+}
 function personForm(x){
   const A = Array.isArray(x.attacks) ? x.attacks : [], fw = fightsWord(x.fightsAs), fmode = !x.fightsAs ? "" : x.fightsAs==="self" ? "self" : "block";
   const items = db.loot.map(i => `<option value="${esc(i.id)}">${esc(i.name||"Unnamed")}</option>`).join("");
-  return `${ui.draft ? `<div class="row" style="align-items:center;margin-bottom:10px">${SELui("disp","Attitude, for rolls",DISPS)}<button class="btn" style="flex:1.2;margin-top:16px" data-roll="whole">🎲 Roll a whole person</button></div>` : ""}
+  const sb = x.statBlock, m = (() => { try { return Survey.npcAsFoe(x); } catch (e) { return null; } })();
+  const spells = (x.spells||[]).map(id => Survey.spellOf(id)).filter(Boolean).sort((a,b)=>a.lv-b.lv || a.name.localeCompare(b.name));
+  const kit = (() => { try { return m ? Survey.foeKit(m).map(e => (Survey.SRD_LOOT.find(i=>i.id===e.id)||{}).name).filter(Boolean) : []; } catch (e) { return []; } })();
+  const modOf = k => { const v = parseInt(x[k]); return isFinite(v) ? Survey.abMod(v) : ""; };
+  return `${ui.draft ? rollPanel() : ""}
     <label class="fld"><span>Name</span><div class="with"><input type="text" data-f="name" value="${esc(x.name||"")}" placeholder="Name them, or roll one"><button class="btn dice" data-roll="name" aria-label="Roll a name">🎲</button></div></label>
     <div class="row">${T(x,"role","Role","Tavern keeper",1.3)}${T(x,"where","Where","The Drowned Bell")}</div>
     <label class="fld"><span>Alignment</span><div class="with"><select data-f="align"><option value="">—</option>${[...ALIGNMENTS,"Unaligned"].map(a=>`<option ${a===x.align?"selected":""}>${a}</option>`).join("")}</select><button class="btn dice" data-roll="align" aria-label="Roll an alignment">🎲</button></div></label>
@@ -387,24 +299,29 @@ function personForm(x){
     ${TA(x,"knows","Knows (or hides)","A secret, a rumor, a way in…",2,"knows")}
     ${TA(x,"backstory","Backstory","Where they're from, how they came to this, what they hope for…",4,"backstory")}
     ${CHK(x,"spare","A spare: nobody yet (an enemy in a fight can be given this name and story)")}
-    <label class="fld"><span>Fights as</span><select data-fmode>${[["","Doesn't fight"],["self","Their own sheet (below)"],["block","A stat block, by name"]].map(([v,l])=>`<option value="${v}" ${v===fmode?"selected":""}>${l}</option>`).join("")}</select></label>
-    ${fmode==="block" ? `<label class="fld"><span>Stat block</span><input type="text" data-fname value="${esc(fw)}" placeholder="Bandit Captain, Guard, Mage…"></label><p class="note" style="margin-top:-6px">The survey matches the name to its stat blocks when it brings them in.</p>` : ""}
+    <label class="fld"><span>Fights as</span><select data-fmode>${[["","Doesn't fight"],["self","Their own sheet (below)"],["block","An SRD stat block"]].map(([v,l])=>`<option value="${v}" ${v===fmode?"selected":""}>${l}</option>`).join("")}</select></label>
+    ${fmode==="block" ? `<label class="fld"><span>Stat block</span><input type="text" data-fname list="dl-foes" value="${esc(fw)}" placeholder="Bandit Captain, Guard, Mage…"></label>
+      <datalist id="dl-foes">${Survey.SRD_FOES.map(f=>`<option value="${esc(f.name)}">`).join("")}</datalist>` : ""}
+    ${sb ? `<p class="note">Built from the SRD <b>${esc(sb.name||"")}</b> stat block${m ? ` · CR ${esc(Survey.crLabel(m.cr))} · ${(m.xp||0).toLocaleString()} XP` : ""}. Numbers typed on the sheet win over it.</p>` : ""}
     ${SEC("sheet","Character sheet", `<div class="row">${T(x,"species","Species","Human")}${T(x,"cls","Class","Fighter")}${T(x,"level","Level","",.6,"number")}</div>
       <div class="row">${T(x,"ac","AC","",.7,"number")}${T(x,"hpMax","HP","",.7,"number")}${T(x,"speed","Speed","30",.8)}${T(x,"init","Init","+0",.7)}</div>
-      <div class="abil">${ABILS.map(([k,l])=>`<label class="fld" style="margin:0"><span>${l}</span><input type="number" inputmode="numeric" data-f="${k}" value="${esc(x[k]??"")}" placeholder="10"></label>`).join("")}</div>
+      <div class="abil">${ABILS.map(([k,l])=>`<label class="fld" style="margin:0"><span>${l}</span><input type="number" inputmode="numeric" data-f="${k}" value="${esc(x[k]??"")}" placeholder="10"><small class="mono" style="display:block;text-align:center;color:var(--ink-soft)" data-mod="${k}">${modOf(k)}</small></label>`).join("")}</div>
       ${T(x,"saves","Saving throws","Wis +5, Int +2")}${T(x,"skills","Skills and tools","Insight +5, Deception +4")}
+      <div class="row">${T(x,"pp","Passive Perception","10",1)}${T(x,"dc","Spell save DC","",.8)}${T(x,"satk","Spell attack","+5",.8)}</div>
       <div class="row">${T(x,"senses","Senses","Darkvision 60 ft.")}${T(x,"langs","Languages","Common")}</div>
       ${T(x,"defenses","Defenses","Resistances, immunities…")}
       <p class="lab" style="margin:6px 0 6px">Attacks</p>
       ${A.map((q,j)=>`<div class="atk"><div class="row">${T(x,`atk.${j}.name`,"Attack","Dagger",1.6)}<button class="btn small danger" data-act="atkdel" data-k="${j}" style="margin-bottom:10px">✕</button></div>
         <div class="row">${T(x,`atk.${j}.hit`,"Hit / DC","+4",.7)}${T(x,`atk.${j}.dmg`,"Damage","1d4+2",.9)}<label class="fld"><span>Type</span><select data-f="atk.${j}.dtype"><option value="">—</option>${DAMAGE_TYPES.map(d=>`<option ${d===q.dtype?"selected":""}>${d}</option>`).join("")}</select></label></div></div>`).join("")}
       <button class="btn wide" data-act="atkadd">+ Add an attack</button>
+      ${spells.length ? `<p class="lab" style="margin:6px 0 6px">Spells</p>${spells.map(s=>`<div class="row" style="align-items:center;margin:0 0 6px"><span style="flex:1">${esc(s.name)} <small class="mono" style="color:var(--ink-soft)">${s.lv ? `level ${s.lv}` : "cantrip"}</small></span><button class="btn small danger" data-act="spdel" data-sp="${esc(s.id)}">✕</button></div>`).join("")}` : ""}
       ${TA(x,"persona","Personality, ideals, bonds, flaws","What drives them…",3)}`,
-      [x.species, x.cls, x.level ? `level ${x.level}` : "", x.ac ? `AC ${x.ac}` : "", x.hpMax ? `HP ${x.hpMax}` : ""].filter(Boolean).join(" · "))}
-    ${SEC("carry","Purse and what they carry", `<div class="purse">${COINS.map(([k,l])=>`<label class="fld" style="margin:0" title="${l}"><span>${k}</span><input type="number" inputmode="numeric" min="0" data-f="purse.${k}" value="${esc((x.purse||{})[k]||"")}" placeholder="0"></label>`).join("")}</div>
+      [x.species, x.cls, x.level ? `level ${x.level}` : "", x.ac ? `AC ${x.ac}` : "", x.hpMax ? `HP ${x.hpMax}` : "", spells.length ? `${spells.length} spells` : ""].filter(Boolean).join(" · "))}
+    ${SEC("carry","Gear, purse and what they carry", `${kit.length ? `<p class="note"><b>Weapons</b> (from their sheet, in plain sight): ${esc(kit.join(", "))}</p>` : ""}
+      <div class="purse">${COINS.map(([k,l])=>`<label class="fld" style="margin:0" title="${l}"><span>${k}</span><input type="number" inputmode="numeric" min="0" data-f="purse.${k}" value="${esc((x.purse||{})[k]||"")}" placeholder="0"></label>`).join("")}</div>
       ${TA(x,"carries","Carries","One thing per line: a rusty key, a love letter…",3)}
       ${items ? `<div class="with" style="margin:-4px 0 10px"><select data-carrypick><option value="">One of your Field Book items…</option>${items}</select><button class="btn" data-act="carryadd">Add</button></div>` : ""}`,
-      [x.carries ? `${String(x.carries).split("\n").filter(s=>s.trim()).length} carried` : ""].filter(Boolean).join(""))}
+      [kit.length ? kit.join(", ") : "", x.carries ? `${String(x.carries).split("\n").filter(s=>s.trim()).length} carried` : ""].filter(Boolean).join(" · "))}
     ${TA(x,"notes","Notes","",3)}`;
 }
 const SELui = (k, label, opts) => `<label class="fld" style="flex:1;margin:0"><span>${label}</span><select data-ui="${k}">${opts.map(([v,l])=>`<option value="${v}" ${v===ui[k]?"selected":""}>${l}</option>`).join("")}</select></label>`;
@@ -432,7 +349,8 @@ function sendView(){
       <p class="note">${db.loot.length} item${db.loot.length===1?"":"s"} and ${db.npcs.length} ${db.npcs.length===1?"person":"people"}, kept on this phone only. Send now and then: a phone can clear a web app's storage, and sending is the backup.</p>
       <p class="note">Add it to your home screen (Share → Add to Home Screen on an iPhone; ⋮ → Install app on Android) and it works offline.</p>
       <button class="btn wide danger" data-act="wipe" ${all?"":"disabled"}>Delete everything on this phone</button>
-      <p class="note mono" style="font-size:11px">Field Book v${VERSION}</p></div>`;
+      <p class="note mono" style="font-size:11px">Field Book v${VERSION}</p>
+      <p class="note" style="font-size:11.5px">${esc(Survey.SRD_CREDIT)}</p></div>`;
 }
 async function send(what){
   const list = what==="all" ? [...db.loot, ...db.npcs] : [...db.loot, ...db.npcs].filter(changed);
@@ -483,14 +401,17 @@ view.addEventListener("input", e => {
   const t = e.target;
   if (t.dataset.q != null) { ui.q = t.value; const at = t.selectionStart; render(); const s = $(".search"); if (s) { s.focus(); try { s.setSelectionRange(at, at); } catch (err) {} } return; }
   const x = entry(); if (!x) return;
-  if (t.dataset.fname != null) { x.fightsAs = t.value.trim() || "block"; touch(x); return; }
+  /* a stat block by name: the SRD's own, matched as you type */
+  if (t.dataset.fname != null) { const v = t.value.trim(), m = Survey.SRD_FOES.find(f=>f.name.toLowerCase()===v.toLowerCase()); x.fightsAs = m ? m.id : (v || "block"); touch(x); return; }
   const k = t.dataset.f; if (!k || t.type==="checkbox" || t.tagName==="SELECT") return;
   setField(x, k, t.value); touch(x);
+  const md = view.querySelector(`[data-mod="${k}"]`); if (md) { const v = parseInt(t.value); md.textContent = isFinite(v) ? Survey.abMod(v) : ""; }
   if (k==="name") { const b = $("#ttl"); if (b) b.textContent = t.value || CAT_WORD[ui.tab][2]; const a = $("#addBtn"); if (a) a.textContent = `Add${t.value.trim() ? " " + t.value.trim() : ""} to the Field Book`; }
 });
 view.addEventListener("change", e => {
   const t = e.target;
-  if (t.dataset.ui) { ui[t.dataset.ui] = t.value; return; }
+  if (t.dataset.ui) { const k = t.dataset.ui; ui[k] = k==="level" ? Math.max(1, Math.min(20, Math.round(+t.value) || 1)) : t.value; if (k==="level") t.value = ui.level;
+    db.roll = Object.fromEntries(ROLL_KEYS.map(q=>[q, ui[q]])); save(); return; }
   const x = entry(); if (!x) return;
   if (t.dataset.fmode != null) { x.fightsAs = t.value==="block" ? (fightsWord(x.fightsAs)!=="self" && x.fightsAs ? x.fightsAs : "block") : t.value; if (!x.fightsAs) delete x.fightsAs; touch(x); render(); return; }
   const k = t.dataset.f; if (!k) return;
@@ -516,9 +437,9 @@ view.addEventListener("click", e => {
     else if (r==="wants") x.wants = cap(pickOne(GEN_WANTS[d]));
     else if (r==="knows") x.knows = cap(pickOne(GEN_SECRET));
     else if (r==="backstory") x.backstory = rollBackstory();
-    else if (r==="whole") { const sp = pickOne(GEN_SPECIES);
-      Object.assign(x, { name:rollName(), species:sp, role:`${{ enemy:"Enemy", neutral:"Neutral", ally:"Potential ally" }[d]} · ${sp}`, align:rollAlignment(d),
-        look:cap(pickOne(GEN_LOOK)), voice:cap(pickOne(GEN_VOICE)), wants:cap(pickOne(GEN_WANTS[d])), knows:cap(pickOne(GEN_SECRET)), backstory:rollBackstory() }); }
+    /* the whole person, rolled by the survey's own Someone to meet: stat block, hit points, spells, weapons, the lot */
+    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.role, species:ui.species, align:ui.align, type:"Humanoid" });
+      for (const k of Object.keys(x)) delete x[k]; Object.assign(x, JSON.parse(JSON.stringify(g.person)), { id:keep }); openSecs.add("sheet"); }
     touch(x); render(); return;
   }
   const a = b.dataset.act;
@@ -533,6 +454,7 @@ view.addEventListener("click", e => {
   if (a==="del" && x) { if (!confirm(`Delete ${x.name||"this"} from the Field Book?${x.fbSent ? " (What you already sent to the survey stays there.)" : ""}`)) return;
     db[ui.tab] = db[ui.tab].filter(y=>y!==x); ui.open = null; save(true); render(); return; }
   if (a==="atkadd" && x) { (x.attacks = x.attacks||[]).push({ name:"", hit:"", dmg:"", dtype:"" }); touch(x); render(); return; }
+  if (a==="spdel" && x) { x.spells = (x.spells||[]).filter(s=>s!==b.dataset.sp); touch(x); render(); return; }
   if (a==="atkdel" && x) { (x.attacks||[]).splice(+b.dataset.k, 1); touch(x); render(); return; }
   if (a==="carryadd" && x) { const s = view.querySelector("[data-carrypick]"), it = s && db.loot.find(i=>i.id===s.value); if (!it) { toast("Pick an item first."); return; }
     x.carries = (String(x.carries||"").replace(/\s+$/,"") ? String(x.carries).replace(/\s+$/,"") + "\n" : "") + it.name; touch(x); render(); toast(`${x.name||"They"} carries ${it.name}.`); return; }
@@ -567,6 +489,7 @@ function showInstall(){
 }
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); });
 window.addEventListener("appinstalled", () => { installEvt = null; showInstall(); toast("Field Book is on your home screen."); });
+$("#ver").textContent = "v" + VERSION;
 applyTheme(); render(); showInstall();
 
 // ── service worker (offline once installed) ──
