@@ -133,7 +133,7 @@
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 3;
+const VERSION = 4;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -553,10 +553,15 @@ function showInstall(){
   const box = $("#install"); if (!box) return;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints > 1);
   if (installed()) { box.hidden = true; return; }
-  if (installEvt) { box.innerHTML = `<div class="row" style="align-items:center"><span style="flex:1">Put Field Book on your home screen; it works offline.</span><button class="btn small main" id="installBtn">Install app</button></div>`; box.hidden = false;
+  if (installEvt) { box.innerHTML = `<div class="row" style="align-items:center"><span style="flex:1">Put Field Book on your home screen; it works offline.</span><button class="btn small main" id="installBtn">Download the app</button></div>`; box.hidden = false;
     $("#installBtn").onclick = async () => { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (err) {} showInstall(); }; return; }
   if (ios) { box.innerHTML = `To put Field Book on your home screen: tap <b>Share</b> <span aria-hidden="true">⬆︎</span> (at the bottom in Safari, or by the address bar in Chrome), then <b>Add to Home Screen</b>. If there's no Share button, you're in another app's browser: open this page in Safari first.`; box.hidden = false; return; }
-  box.hidden = true;
+  /* Android with no offer from Chrome yet (or opened inside another app's browser): the button explains the way */
+  if (!/Android/i.test(navigator.userAgent)) { box.hidden = true; return; }
+  box.innerHTML = `<div class="row" style="align-items:center"><span style="flex:1">Put Field Book on your home screen; it works offline.</span><button class="btn small main" id="installBtn">Download the app</button></div><div id="installHow" hidden style="margin-top:8px"></div>`;
+  box.hidden = false;
+  $("#installBtn").onclick = () => { const h = $("#installHow"); h.hidden = !h.hidden;
+    h.innerHTML = `In Chrome, tap <b>⋮</b> (top right), then <b>Add to home screen</b> → <b>Install</b>.<br>No ⋮ menu with that, or a plain X at the top left? You're in another app's browser: tap its menu and <b>Open in Chrome</b>, then do the above.`; };
 }
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); });
 window.addEventListener("appinstalled", () => { installEvt = null; showInstall(); toast("Field Book is on your home screen."); });
