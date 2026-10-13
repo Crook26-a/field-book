@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, tables:[
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 8;
+const VERSION = 9;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -194,8 +194,8 @@ function applyTheme(){ const dark = db.theme ? db.theme==="dark" : matchMedia("(
 $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("dark") ? "light" : "dark"; save(); applyTheme(); };
 
 /* ── what's on screen ── */
-const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", species:"", align:"" };     // open: an entry's id; draft: { cat, x } not added yet
-const ROLL_KEYS = ["disp","level","role","species","align"];
+const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
+const ROLL_KEYS = ["disp","level","role","species","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
 const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"] };
 const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x.id===ui.open) : null;
@@ -273,11 +273,13 @@ function fightsWord(v){ if (!v || v==="block") return ""; if (v==="self") return
 /* the roller, as on the survey's Roll tab (Someone to meet): level, attitude, class, species, alignment */
 function rollPanel(){
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(v)===String(cur??"")?"selected":""}>${esc(l)}</option>`;
-  return `<div class="panel" style="padding-bottom:2px"><p class="lab" style="margin:0 0 8px">Roll someone, the way the survey does</p>
+  return `<div class="panel" style="padding-bottom:2px"><p class="lab" style="margin:0 0 8px">Roll someone (or something), the way the survey does</p>
     <div class="row"><label class="fld" style="flex:.6"><span>Level</span><input type="number" inputmode="numeric" min="1" max="20" data-ui="level" value="${esc(ui.level)}"></label>
       <label class="fld"><span>Attitude</span><select data-ui="disp">${DISPS.map(([v,l])=>opt(v, l, ui.disp)).join("")}</select></label></div>
-    <div class="row"><label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>
-      <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>
+    <label class="fld"><span>Type</span><select data-ui="type">${opt("Humanoid", "Humanoid: a person", ui.type)}${Survey.CREATURE_TYPES.filter(t=>t!=="Humanoid").map(t=>opt(t, t, ui.type)).join("")}</select></label>
+    ${ui.type==="Humanoid" ? `<div class="row"><label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>
+      <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>`
+      : `<label class="fld"><span>Which ${esc(ui.type.toLowerCase())}</span><select data-ui="foe">${Survey.creatureOptions(ui.type, ui.foe)}</select></label>`}
     <label class="fld"><span>Alignment</span><select data-ui="align">${opt("", "Any: one that fits the attitude", ui.align)}${ALIGNMENTS.map(a=>opt(a, a, ui.align)).join("")}</select></label>
     <button class="btn wide main" data-roll="whole">🎲 Roll someone</button>
     <p class="note">Their level picks an SRD stat block for their class and rolls their hit points; a caster gets their class's spells and slots (2024 tables), and they get their own weapons. Roll again as often as you like before you add them.</p></div>`;
@@ -417,7 +419,8 @@ view.addEventListener("input", e => {
 view.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.ui) { const k = t.dataset.ui; ui[k] = k==="level" ? Math.max(1, Math.min(20, Math.round(+t.value) || 1)) : t.value; if (k==="level") t.value = ui.level;
-    db.roll = Object.fromEntries(ROLL_KEYS.map(q=>[q, ui[q]])); save(); return; }
+    if (k==="type") ui.foe = "";
+    db.roll = Object.fromEntries(ROLL_KEYS.map(q=>[q, ui[q]])); save(); if (k==="type") render(); return; }
   const x = entry(); if (!x) return;
   /* a weapon picked for their attacks, worked out from their sheet the survey's way */
   if (t.dataset.weap != null) { const at = t.value && Survey.weaponAttack(x, t.value); if (!at) return; (x.attacks = x.attacks||[]).push(at); touch(x); render(); toast(`${at.name}: ${at.hit} to hit, ${at.dmg} ${at.dtype}.`); return; }
@@ -448,7 +451,8 @@ view.addEventListener("click", e => {
     else if (r==="knows") x.knows = cap(pickOne(GEN_SECRET));
     else if (r==="backstory") x.backstory = rollBackstory();
     /* the whole person, rolled by the survey's own Someone to meet: stat block, hit points, spells, weapons, the lot */
-    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.role, species:ui.species, align:ui.align, type:"Humanoid" });
+    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.role, species:ui.species, align:ui.align, type:ui.type || "Humanoid", foe:ui.foe });
+      if (g.kind!=="person") { toast(g.why || "Nothing to roll."); return; }
       for (const k of Object.keys(x)) delete x[k]; Object.assign(x, JSON.parse(JSON.stringify(g.person)), { id:keep }); openSecs.add("sheet"); }
     touch(x); render(); return;
   }
