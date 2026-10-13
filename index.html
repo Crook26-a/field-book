@@ -133,13 +133,13 @@
 <div id="ver" aria-hidden="true"></div>
 <input type="file" id="fileIn" accept=".json,.txt,application/json,text/plain" hidden>
 <script>/* what survey.js asks the phone for: its library, and the level to roll at */
-window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, tables:[] }), level: () => ui.level || 3 };</script>
+window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:db.spells, tables:[] }), level: () => ui.level || 3 };</script>
 <script src="survey.js"></script>
 <script>
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 9;
+const VERSION = 10;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -173,7 +173,7 @@ const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"")
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -197,17 +197,19 @@ $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("da
 const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
 const ROLL_KEYS = ["disp","level","role","species","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
-const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"] };
+const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"] };
+const allEntries = () => [...db.loot, ...db.npcs, ...db.spells];
 const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x.id===ui.open) : null;
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
-const toSend = () => [...db.loot, ...db.npcs].filter(changed).length;
+const toSend = () => allEntries().filter(changed).length;
 
 function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarity : "", x.value, x.dmg ? `${x.dmg}${x.dtype?" "+x.dtype:""}` : "", x.heal ? `heals ${x.heal}` : "", x.charges ? `${x.charges} charges` : "", x.attune ? "attunement" : ""].filter(Boolean).join(" · "); }
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
+const lineOf = (cat, x) => cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : personLine(x);
 
 function render(){
   const send = toSend();
-  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["send","Send",send]].map(([k,l,n]) =>
+  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["send","Send",send]].map(([k,l,n]) =>
     `<button class="tab ${ui.tab===k?"on":""}" data-tab="${k}">${l}<small>${k==="send" ? (n ? `<span class="badge">${n}</span>` : "all sent") : n}</small></button>`).join("");
   $("#hdr").hidden = !!entry();
   const v = $("#view");
@@ -220,8 +222,9 @@ function listView(cat){
   const q = ui.q.trim().toLowerCase(), list = db[cat].filter(x => !q || JSON.stringify(x).toLowerCase().includes(q));
   return `<input class="search" type="text" data-q placeholder="Search your ${CAT_WORD[cat][1]}…" value="${esc(ui.q)}">
     <button class="btn wide main" data-act="new">+ ${CAT_WORD[cat][2]}</button>
+    ${cat==="spells" ? `<div class="with" style="margin:-2px 0 12px"><input type="text" data-copyname list="dl-srdspells" placeholder="…or start from an SRD spell"><button class="btn" data-act="copysrd">Copy</button></div><datalist id="dl-srdspells">${Survey.SRD_SPELLS.map(s=>`<option value="${esc(s.name)}">`).join("")}</datalist>` : ""}
     ${list.length ? list.map(x => `<button class="card" data-open="${esc(x.id)}">${changed(x) ? `<span class="dot" title="Not sent yet"></span>` : ""}<span class="nm">${esc(x.name||"Unnamed")}</span>
-      ${(cat==="loot" ? itemLine(x) : personLine(x)) ? `<span class="sub">${esc(cat==="loot" ? itemLine(x) : personLine(x))}</span>` : ""}</button>`).join("")
+      ${lineOf(cat, x) ? `<span class="sub">${esc(lineOf(cat, x))}</span>` : ""}</button>`).join("")
       : `<p class="empty">${q ? "Nothing matches." : `No ${CAT_WORD[cat][1]} yet. Make one, and send it to the survey from the Send tab.`}</p>`}
     ${list.length ? `<p class="note">A red dot: made or changed since you last sent.</p>` : ""}`;
 }
@@ -239,7 +242,7 @@ function sheetView(cat, x){
   const draft = !!ui.draft, word = CAT_WORD[cat];
   const top = `<div class="sheet-top"><button class="btn small" data-act="back">‹ ${draft ? "Cancel" : word[1].charAt(0).toUpperCase()+word[1].slice(1)}</button>
     <div class="ttl"><b id="ttl">${esc(x.name || word[2])}</b>${draft ? `<small>not added yet</small>` : ""}</div></div>`;
-  const body = cat==="loot" ? itemForm(x) : personForm(x);
+  const body = cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : personForm(x);
   const foot = draft
     ? `<div class="foot"><button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
     : `<div class="foot"><div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
@@ -284,6 +287,23 @@ function rollPanel(){
     <button class="btn wide main" data-roll="whole">🎲 Roll someone</button>
     <p class="note">Their level picks an SRD stat block for their class and rolls their hit points; a caster gets their class's spells and slots (2024 tables), and they get their own weapons. Roll again as often as you like before you add them.</p></div>`;
 }
+/* a spell of your own, on the survey's spell fields (the SRD's), so it casts, scales with a higher slot and heals there */
+const ABIL_FULL = ["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"];
+function spellForm(x){
+  return `${T(x,"name","Name","Frost Lash")}
+    <div class="row">${SEL(x,"lv","Level",[[0,"Cantrip"],...[1,2,3,4,5,6,7,8,9].map(n=>[n, `Level ${n}`])])}${SEL(x,"school","School",Survey.SPELL_SCHOOLS)}</div>
+    <div class="row">${T(x,"time","Casting time","Action, 1 minute")}${T(x,"range","Range","60 feet, Touch")}</div>
+    <div class="row">${T(x,"comp","Components","V, S, M (salt)",1.2)}${T(x,"dur","Duration","Instantaneous")}</div>
+    <div class="row">${CHK(x,"conc","Concentration")}${CHK(x,"rit","Ritual")}</div>
+    ${T(x,"cls","Classes","Wizard, Sorcerer")}
+    <div class="row">${SEL(x,"save","Saving throw",ABIL_FULL,1,"None")}<div style="flex:1;padding-top:16px">${CHK(x,"atk","A spell attack")}</div></div>
+    <div class="row">${T(x,"dmg","Dice (damage, or healing)","2d8")}${SEL(x,"dtype","Damage type",DAMAGE_TYPES,1,"—")}</div>
+    ${TA(x,"desc","What it does","Each creature in a 15-foot Cone makes a Dexterity saving throw, taking 2d8 Cold damage on a failed save… (or: a creature regains 1d8 Hit Points)",4)}
+    ${TA(x,"hi","With a higher-level slot","The damage increases by 1d8 for each spell slot level above 1.",2)}
+    <p class="note">Write damage, healing and the higher-slot line as the SRD does ("…regains 1d8 Hit Points", "increases by 1d6 for each spell slot level above 2") and the survey rolls and scales them when it's cast.</p>
+    ${TA(x,"notes","Notes","",2)}`;
+}
+const spellNames = () => `<datalist id="dl-allspells">${Survey.allSpells().map(s=>`<option value="${esc(s.name)}">`).join("")}</datalist>`;
 /* a dropdown on the sheet, as in the survey: the list, whatever's already there kept as its own choice, and Other… to type one */
 function pickList(k, list, cur){
   const has = !cur || list.includes(cur);
@@ -322,7 +342,9 @@ function personForm(x){
         <div class="row">${T(x,`atk.${j}.hit`,"Hit / DC","+4",.7)}${T(x,`atk.${j}.dmg`,"Damage","1d4+2",.9)}<label class="fld"><span>Type</span><select data-f="atk.${j}.dtype"><option value="">—</option>${DAMAGE_TYPES.map(d=>`<option ${d===q.dtype?"selected":""}>${d}</option>`).join("")}</select></label></div></div>`).join("")}
       <div class="with" style="margin:0 0 10px"><select data-weap><option value="">Add a weapon attack…</option>${Survey.attackWeapons().map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select><button class="btn" data-act="atkadd" title="A blank row: a claw, a spell, a thrown bottle">Other</button></div>
       <p class="note" style="margin-top:-6px">A weapon's to-hit and damage come from their Strength or Dexterity and proficiency bonus (2024 rules).</p>
-      ${spells.length ? `<p class="lab" style="margin:6px 0 6px">Spells</p>${spells.map(s=>`<div class="row" style="align-items:center;margin:0 0 6px"><span style="flex:1">${esc(s.name)} <small class="mono" style="color:var(--ink-soft)">${s.lv ? `level ${s.lv}` : "cantrip"}</small></span><button class="btn small danger" data-act="spdel" data-sp="${esc(s.id)}">✕</button></div>`).join("")}` : ""}
+      <p class="lab" style="margin:6px 0 6px">Spells</p>
+      <div class="with" style="margin:0 0 8px"><input type="text" data-spname list="dl-allspells" placeholder="Add a spell by name (SRD or yours)…"><button class="btn" data-act="spadd">Add</button></div>${spellNames()}
+      ${spells.length ? `${spells.map(s=>`<div class="row" style="align-items:center;margin:0 0 6px"><span style="flex:1">${esc(s.name)} <small class="mono" style="color:var(--ink-soft)">${s.lv ? `level ${s.lv}` : "cantrip"}</small></span><button class="btn small danger" data-act="spdel" data-sp="${esc(s.id)}">✕</button></div>`).join("")}` : ""}
       ${TA(x,"persona","Personality, ideals, bonds, flaws","What drives them…",3)}`,
       [x.species, x.cls, x.level ? `level ${x.level}` : "", x.ac ? `AC ${x.ac}` : "", x.hpMax ? `HP ${x.hpMax}` : "", spells.length ? `${spells.length} spells` : ""].filter(Boolean).join(" · "))}
     ${SEC("carry","Gear, purse and what they carry", `${kit.length ? `<p class="note"><b>Weapons</b> (from their sheet, in plain sight): ${esc(kit.join(", "))}</p>` : ""}
@@ -337,11 +359,11 @@ const SELui = (k, label, opts) => `<label class="fld" style="flex:1;margin:0"><s
 /* ── sending: a .json file the survey's Library brings in (Library → Field Book → Bring in), or text to paste ── */
 function pack(list){ const clean = x => { const o = {}; for (const k in x) if (!/^fb/.test(k)) o[k] = x[k]; if (o.fightsAs==="block") delete o.fightsAs; return o; };
   return { format:"ordinate-fieldbook", version:VERSION, app:"Field Book", exported:new Date().toISOString(),
-    loot:list.filter(x=>db.loot.includes(x)).map(clean), npcs:list.filter(x=>db.npcs.includes(x)).map(clean) }; }
+    loot:list.filter(x=>db.loot.includes(x)).map(clean), npcs:list.filter(x=>db.npcs.includes(x)).map(clean), spells:list.filter(x=>db.spells.includes(x)).map(clean) }; }
 const stamp = () => { const d = new Date(), p = n => String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`; };
 let lastText = "";
 function sendView(){
-  const fresh = [...db.loot, ...db.npcs].filter(changed), all = db.loot.length + db.npcs.length;
+  const fresh = allEntries().filter(changed), all = allEntries().length;
   const when = db.lastSent ? new Date(db.lastSent).toLocaleString([], { dateStyle:"medium", timeStyle:"short" }) : "never";
   return `<div class="panel"><h2>Send to the survey</h2>
       <p class="note">${fresh.length ? `<b>${fresh.length}</b> new or changed since you last sent (${esc(when)}).` : all ? `Everything has been sent (last: ${esc(when)}).` : "Nothing written yet."}</p>
@@ -354,14 +376,14 @@ function sendView(){
       <p class="note">A Field Book file from another phone, a backup, or the survey's own Library (Library → Field Book → Send to it) so you can work on things you already have.</p>
       <button class="btn wide" data-act="import">Choose a file…</button></div>
     <div class="panel"><h2>On this phone</h2>
-      <p class="note">${db.loot.length} item${db.loot.length===1?"":"s"} and ${db.npcs.length} ${db.npcs.length===1?"person":"people"}, kept on this phone only. Send now and then: a phone can clear a web app's storage, and sending is the backup.</p>
+      <p class="note">${db.loot.length} item${db.loot.length===1?"":"s"}, ${db.npcs.length} ${db.npcs.length===1?"person":"people"} and ${db.spells.length} spell${db.spells.length===1?"":"s"}, kept on this phone only. Send now and then: a phone can clear a web app's storage, and sending is the backup.</p>
       <p class="note">Add it to your home screen (Share → Add to Home Screen on an iPhone; ⋮ → Install app on Android) and it works offline.</p>
       <button class="btn wide danger" data-act="wipe" ${all?"":"disabled"}>Delete everything on this phone</button>
       <p class="note mono" style="font-size:11px">Field Book v${VERSION}</p>
       <p class="note" style="font-size:11.5px">${esc(Survey.SRD_CREDIT)}</p></div>`;
 }
 async function send(what){
-  const list = what==="all" ? [...db.loot, ...db.npcs] : [...db.loot, ...db.npcs].filter(changed);
+  const list = what==="all" ? allEntries() : allEntries().filter(changed);
   if (!list.length) return;
   const text = JSON.stringify(pack(list), null, 1), name = `field-book-${stamp().replace(" ","-")}.json`;
   const file = new File([text], name, { type:"application/json" });
@@ -377,7 +399,7 @@ async function send(what){
   done(); toast(`Saved ${name}.`);
 }
 async function copyText(){
-  const fresh = [...db.loot, ...db.npcs].filter(changed), list = fresh.length ? fresh : [...db.loot, ...db.npcs];
+  const fresh = allEntries().filter(changed), list = fresh.length ? fresh : allEntries();
   lastText = JSON.stringify(pack(list));
   try { await navigator.clipboard.writeText(lastText); toast(`Copied ${list.length}${fresh.length ? "" : " (everything: nothing was new)"}. Paste it to Claude or into an email.`); }
   catch (e) { toast("Couldn't copy by itself: copy the text below."); }
@@ -385,11 +407,11 @@ async function copyText(){
 }
 function bringIn(text){
   let o; try { o = JSON.parse(text); } catch (e) { toast("That isn't a Field Book file."); return; }
-  if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs))) { toast("No items or people in that file."); return; }
+  if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs) && !Array.isArray(o.spells))) { toast("No items or people in that file."); return; }
   let added = 0, updated = 0;
-  for (const cat of ["loot","npcs"]) for (const x of (o[cat]||[])) {
+  for (const cat of ["loot","npcs","spells"]) for (const x of (o[cat]||[])) {
     if (!x || typeof x!=="object" || !x.name) continue;
-    if (!x.id) x.id = uid(cat==="loot" ? "ll" : "ln");
+    if (!x.id) x.id = uid(cat==="loot" ? "ll" : cat==="spells" ? "lsp" : "ln");
     const had = db[cat].find(y=>y.id===x.id), t = Date.now();
     if (had) { Object.assign(had, x); had.fbSent = had.fbEdited = t; updated++; } else { x.fbMade = x.fbSent = x.fbEdited = t; db[cat].push(x); added++; }
   }
@@ -397,7 +419,7 @@ function bringIn(text){
 }
 
 /* ── doing things ── */
-function touch(x){ x.fbEdited = Date.now(); if (!ui.draft) save(); }
+function touch(x){ x.fbEdited = Date.now(); if (db.spells.includes(x) || (ui.draft && ui.draft.cat==="spells" && ui.draft.x===x)) Survey.spellTidy(x); if (!ui.draft) save(); }
 function setField(x, k, v){
   if (k.startsWith("atk.")) { const [, j, f] = k.split("."); (x.attacks = x.attacks||[])[+j] = Object.assign(x.attacks[+j]||{}, { [f]:v }); }
   else if (k.startsWith("purse.")) { x.purse = x.purse||{}; const n = Math.max(0, Math.round(+v||0)); if (n) x.purse[k.slice(6)] = n; else delete x.purse[k.slice(6)]; }
@@ -431,6 +453,7 @@ view.addEventListener("change", e => {
   if (t.type==="checkbox") setField(x, k, t.checked);
   else if (t.tagName==="SELECT") {
     setField(x, k, t.value);
+    if (k==="lv") x.lv = +t.value || 0;
     /* the price follows the rarity (half for a potion) unless you typed one */
     if ((k==="rarity" || k==="kind") && ui.tab==="loot") { const g = rarityGuess(x.rarity, x.kind==="potion"); if (g && (!x.value || /^~/.test(String(x.value).trim()))) x.value = g; }
   } else return;
@@ -457,7 +480,7 @@ view.addEventListener("click", e => {
     touch(x); render(); return;
   }
   const a = b.dataset.act;
-  if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
+  if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
     const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
   if (a==="back") { ui.draft = null; ui.open = null; save(true); render(); return; }
   if (a==="add" && ui.draft) {
@@ -468,6 +491,12 @@ view.addEventListener("click", e => {
   if (a==="del" && x) { if (!confirm(`Delete ${x.name||"this"} from the Field Book?${x.fbSent ? " (What you already sent to the survey stays there.)" : ""}`)) return;
     db[ui.tab] = db[ui.tab].filter(y=>y!==x); ui.open = null; save(true); render(); return; }
   if (a==="atkadd" && x) { (x.attacks = x.attacks||[]).push({ name:"", hit:"", dmg:"", dtype:"" }); touch(x); render(); return; }
+  if (a==="spadd" && x) { const i = view.querySelector("[data-spname]"), s = i && Survey.spellByName(i.value); if (!s) { toast("Pick a spell from the list."); return; }
+    x.spells = x.spells||[]; if (!x.spells.includes(s.id)) x.spells.push(s.id); touch(x); render(); toast(`${x.name||"They"} knows ${s.name}.`); return; }
+  /* start a spell of your own from an SRD one: a copy to change, not yet added */
+  if (a==="copysrd") { const i = view.querySelector("[data-copyname]"), s = i && Survey.SRD_SPELLS.find(q=>q.name.toLowerCase()===String(i.value).trim().toLowerCase());
+    if (!s) { toast("Pick an SRD spell from the list."); return; }
+    const c = Survey.copyFromSrd("spells", s.id); c.id = uid("lsp"); ui.draft = { cat:"spells", x:c }; ui.open = null; render(); scrollTo(0, 0); return; }
   if (a==="spdel" && x) { x.spells = (x.spells||[]).filter(s=>s!==b.dataset.sp); touch(x); render(); return; }
   if (a==="atkdel" && x) { (x.attacks||[]).splice(+b.dataset.k, 1); touch(x); render(); return; }
   if (a==="carryadd" && x) { const s = view.querySelector("[data-carrypick]"), it = s && db.loot.find(i=>i.id===s.value); if (!it) { toast("Pick an item first."); return; }
