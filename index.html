@@ -122,6 +122,7 @@
   <header id="hdr">
     <div class="headrow"><h1>Field <b>Book</b></h1><button id="themeBtn" aria-label="Light or dark">◐</button></div>
     <p class="caps">A pocket notebook for Ordinate Survey</p>
+    <div id="install" hidden style="margin-top:10px;padding:9px 11px;border:1px dashed var(--lead);border-radius:3px;font-size:14.5px"></div>
   </header>
   <main id="view"></main>
 </div>
@@ -132,7 +133,7 @@
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 2;
+const VERSION = 3;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -544,7 +545,22 @@ $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) re
   if (ui.draft && ui.draft.x.name && !confirm(`Leave ${ui.draft.x.name} without adding it?`)) return;
   ui.tab = b.dataset.tab; ui.open = null; ui.draft = null; ui.q = ""; render(); scrollTo(0, 0); };
 
-applyTheme(); render();
+/* ── getting it onto the home screen: Android offers an install (shown as a button here); an iPhone never offers,
+   so say how (Share → Add to Home Screen). Hidden once it's running as an installed app. ── */
+const installed = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let installEvt = null;
+function showInstall(){
+  const box = $("#install"); if (!box) return;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints > 1);
+  if (installed()) { box.hidden = true; return; }
+  if (installEvt) { box.innerHTML = `<div class="row" style="align-items:center"><span style="flex:1">Put Field Book on your home screen; it works offline.</span><button class="btn small main" id="installBtn">Install app</button></div>`; box.hidden = false;
+    $("#installBtn").onclick = async () => { const e = installEvt; installEvt = null; e.prompt(); try { await e.userChoice; } catch (err) {} showInstall(); }; return; }
+  if (ios) { box.innerHTML = `To put Field Book on your home screen: tap <b>Share</b> <span aria-hidden="true">⬆︎</span> (at the bottom in Safari, or by the address bar in Chrome), then <b>Add to Home Screen</b>. If there's no Share button, you're in another app's browser: open this page in Safari first.`; box.hidden = false; return; }
+  box.hidden = true;
+}
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; showInstall(); });
+window.addEventListener("appinstalled", () => { installEvt = null; showInstall(); toast("Field Book is on your home screen."); });
+applyTheme(); render(); showInstall();
 
 // ── service worker (offline once installed) ──
 if ("serviceWorker" in navigator && location.protocol === "https:") {
