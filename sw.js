@@ -1,5 +1,5 @@
 // Service worker: caches the whole app so it opens instantly, even offline.
-const CACHE = "field-book-v1";
+const CACHE = "field-book-v2";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
 self.addEventListener("install", e => {
