@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 11;
+const VERSION = 12;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -173,7 +173,7 @@ const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"")
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -194,22 +194,23 @@ function applyTheme(){ const dark = db.theme ? db.theme==="dark" : matchMedia("(
 $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("dark") ? "light" : "dark"; save(); applyTheme(); };
 
 /* ── what's on screen ── */
-const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
-const ROLL_KEYS = ["disp","level","role","species","align","type","foe"];
+const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", kind:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
+const ROLL_KEYS = ["disp","level","role","kind","species","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
-const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"] };
-const allEntries = () => [...db.loot, ...db.npcs, ...db.spells];
+const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"] };
+const allEntries = () => [...db.loot, ...db.npcs, ...db.spells, ...db.shops];
 const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x.id===ui.open) : null;
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
 const toSend = () => allEntries().filter(changed).length;
 
 function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarity : "", x.value, x.dmg ? `${x.dmg}${x.dtype?" "+x.dtype:""}` : "", x.heal ? `heals ${x.heal}` : "", x.charges ? `${x.charges} charges` : "", x.attune ? "attunement" : ""].filter(Boolean).join(" · "); }
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
-const lineOf = (cat, x) => cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : personLine(x);
+function shopLine(x){ const k = Survey.PEOPLE_KINDS[x.keeper]; return [k ? `kept by a ${k.label.toLowerCase()}` : "", `${x.nmin||4}-${x.nmax||6} for sale`, `${String(x.srd||"").split("\n").filter(s=>s.trim()).length + String(x.goods||"").split("\n").filter(s=>s.trim()).length} it can stock`].filter(Boolean).join(" · "); }
+const lineOf = (cat, x) => cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : cat==="shops" ? shopLine(x) : personLine(x);
 
 function render(){
   const send = toSend();
-  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["send","Send",send]].map(([k,l,n]) =>
+  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["shops","Shops",db.shops.length],["send","Send",send]].map(([k,l,n]) =>
     `<button class="tab ${ui.tab===k?"on":""}" data-tab="${k}">${l}<small>${k==="send" ? (n ? `<span class="badge">${n}</span>` : "all sent") : n}</small></button>`).join("");
   $("#hdr").hidden = !!entry();
   const v = $("#view");
@@ -242,7 +243,7 @@ function sheetView(cat, x){
   const draft = !!ui.draft, word = CAT_WORD[cat];
   const top = `<div class="sheet-top"><button class="btn small" data-act="back">‹ ${draft ? "Cancel" : word[1].charAt(0).toUpperCase()+word[1].slice(1)}</button>
     <div class="ttl"><b id="ttl">${esc(x.name || word[2])}</b>${draft ? `<small>not added yet</small>` : ""}</div></div>`;
-  const body = cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : personForm(x);
+  const body = cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : personForm(x);
   const foot = draft
     ? `<div class="foot"><button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
     : `<div class="foot"><div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
@@ -269,7 +270,25 @@ function itemForm(x){
       ${CHK(x,"usedUp","Used up when empty (a potion, a scroll, a bomb)")}
       <div class="row">${T(x,"heal","Heals","2d4+2")}${T(x,"tempHp","Temp HP","1d4")}</div>
       ${SEL(x,"cond","Puts on",CONDITIONS,1,"No condition")}`, [x.use, x.heal ? `heals ${x.heal}` : ""].filter(Boolean).join(" · "))}
+    ${(() => { const on = x.soldAt || [], kinds = [...Object.entries(Survey.SHOP_TEMPLATES).map(([id, s])=>[id, s.label]), ...db.shops.map(s=>[s.id, s.name||"Shop"])];
+      return SEC("sold","Sold at", `<p class="note">Tick the kinds of shop that sell it: it can turn up in their stock in the survey.</p>
+        <div class="row" style="flex-wrap:wrap;gap:0 12px">${kinds.map(([id, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-soldat="${esc(id)}" ${on.includes(id)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`,
+        on.length ? kinds.filter(([id])=>on.includes(id)).map(([, l])=>l).join(", ") : "not sold in shops"); })()}
     ${TA(x,"notes","Notes","Where it turns up, who wants it…",3)}`;
+}
+/* a kind of shop of your own, as in the survey's Library (Shop kinds): who keeps it, what it can stock */
+function shopForm(x){
+  const ko = (k, any) => `<select data-f="${k}">${any ? `<option value="">${esc(any)}</option>` : ""}${Survey.PEOPLE_KIND_GROUPS.map(g=>`<optgroup label="${esc(g)}">${Object.entries(Survey.PEOPLE_KINDS).filter(([, q])=>q.group===g).map(([id, q])=>`<option value="${id}" ${x[k]===id?"selected":""}>${esc(q.label)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  const bad = String(x.srd||"").split("\n").map(s=>s.trim()).filter(s=>s && !Survey.lootByName(s));
+  return `${T(x,"name","Name","Candle-maker")}
+    <div class="row"><label class="fld"><span>Kept by a</span>${ko("keeper")}</label><label class="fld"><span>Sometimes a hand</span>${ko("staff", "Nobody")}</label></div>
+    <div class="row">${T(x,"nmin","For sale, at least","4",1,"number")}${T(x,"nmax","at most","6",1,"number")}</div>
+    <label class="fld"><span>Start from one of the survey's kinds (fills the lists below)</span><select data-shopfrom><option value="">—</option>${Object.entries(Survey.SHOP_TEMPLATES).map(([id, s])=>`<option value="${id}">${esc(s.label)}</option>`).join("")}</select></label>
+    ${TA(x,"srd","SRD gear it sells (one a line, as the SRD writes it: Rope, Lantern, Hooded)","Rope\nCandle",4)}
+    ${bad.length ? `<p class="note" style="color:var(--lead)">Not in the SRD: ${esc(bad.join(", "))}. Check the spelling, or put it under its own goods.</p>` : ""}
+    ${TA(x,"goods","Its own goods (one a line: name | price | what it is)","Beeswax candle | 2 cp | Burns clean and smells of honey.",5)}
+    <p class="note">Its own goods are priced by you (your table rule). Items with this shop ticked under Sold at can turn up too.</p>
+    ${TA(x,"notes","Notes","",2)}`;
 }
 
 function fightsWord(v){ if (!v || v==="block") return ""; if (v==="self") return "self"; const m = Survey.SRD_FOES.find(f=>f.id===v); return m ? m.name : /^srd:/.test(v) ? v.slice(4).split("-").map(cap).join(" ") : v; }
@@ -280,7 +299,8 @@ function rollPanel(){
     <div class="row"><label class="fld" style="flex:.6"><span>Level</span><input type="number" inputmode="numeric" min="1" max="20" data-ui="level" value="${esc(ui.level)}"></label>
       <label class="fld"><span>Attitude</span><select data-ui="disp">${DISPS.map(([v,l])=>opt(v, l, ui.disp)).join("")}</select></label></div>
     <label class="fld"><span>Type</span><select data-ui="type">${opt("Humanoid", "Humanoid: a person", ui.type)}${Survey.CREATURE_TYPES.filter(t=>t!=="Humanoid").map(t=>opt(t, t, ui.type)).join("")}</select></label>
-    ${ui.type==="Humanoid" ? `<div class="row"><label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>
+    ${ui.type==="Humanoid" ? `<label class="fld"><span>Kind of person (what they do for a living)</span><select data-ui="kind">${Survey.kindOptions(ui.kind)}</select></label>` : ""}
+    ${ui.type==="Humanoid" ? `<div class="row">${ui.kind ? "" : `<label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>`}
       <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>`
       : `<label class="fld"><span>Which ${esc(ui.type.toLowerCase())}</span><select data-ui="foe">${Survey.creatureOptions(ui.type, ui.foe)}</select></label>`}
     <label class="fld"><span>Alignment</span><select data-ui="align">${opt("", "Any: one that fits the attitude", ui.align)}${ALIGNMENTS.map(a=>opt(a, a, ui.align)).join("")}</select></label>
@@ -362,7 +382,7 @@ const SELui = (k, label, opts) => `<label class="fld" style="flex:1;margin:0"><s
 /* ── sending: a .json file the survey's Library brings in (Library → Field Book → Bring in), or text to paste ── */
 function pack(list){ const clean = x => { const o = {}; for (const k in x) if (!/^fb/.test(k)) o[k] = x[k]; if (o.fightsAs==="block") delete o.fightsAs; return o; };
   return { format:"ordinate-fieldbook", version:VERSION, app:"Field Book", exported:new Date().toISOString(),
-    loot:list.filter(x=>db.loot.includes(x)).map(clean), npcs:list.filter(x=>db.npcs.includes(x)).map(clean), spells:list.filter(x=>db.spells.includes(x)).map(clean) }; }
+    loot:list.filter(x=>db.loot.includes(x)).map(clean), npcs:list.filter(x=>db.npcs.includes(x)).map(clean), spells:list.filter(x=>db.spells.includes(x)).map(clean), shops:list.filter(x=>db.shops.includes(x)).map(clean) }; }
 const stamp = () => { const d = new Date(), p = n => String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`; };
 let lastText = "";
 function sendView(){
@@ -379,7 +399,7 @@ function sendView(){
       <p class="note">A Field Book file from another phone, a backup, or the survey's own Library (Library → Field Book → Send to it) so you can work on things you already have.</p>
       <button class="btn wide" data-act="import">Choose a file…</button></div>
     <div class="panel"><h2>On this phone</h2>
-      <p class="note">${db.loot.length} item${db.loot.length===1?"":"s"}, ${db.npcs.length} ${db.npcs.length===1?"person":"people"} and ${db.spells.length} spell${db.spells.length===1?"":"s"}, kept on this phone only. Send now and then: a phone can clear a web app's storage, and sending is the backup.</p>
+      <p class="note">${db.loot.length} item${db.loot.length===1?"":"s"}, ${db.npcs.length} ${db.npcs.length===1?"person":"people"}, ${db.spells.length} spell${db.spells.length===1?"":"s"} and ${db.shops.length} shop kind${db.shops.length===1?"":"s"}, kept on this phone only. Send now and then: a phone can clear a web app's storage, and sending is the backup.</p>
       <p class="note">Add it to your home screen (Share → Add to Home Screen on an iPhone; ⋮ → Install app on Android) and it works offline.</p>
       <button class="btn wide danger" data-act="wipe" ${all?"":"disabled"}>Delete everything on this phone</button>
       <p class="note mono" style="font-size:11px">Field Book v${VERSION}</p>
@@ -410,11 +430,11 @@ async function copyText(){
 }
 function bringIn(text){
   let o; try { o = JSON.parse(text); } catch (e) { toast("That isn't a Field Book file."); return; }
-  if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs) && !Array.isArray(o.spells))) { toast("No items or people in that file."); return; }
+  if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs) && !Array.isArray(o.spells) && !Array.isArray(o.shops))) { toast("No items or people in that file."); return; }
   let added = 0, updated = 0;
-  for (const cat of ["loot","npcs","spells"]) for (const x of (o[cat]||[])) {
+  for (const cat of ["loot","npcs","spells","shops"]) for (const x of (o[cat]||[])) {
     if (!x || typeof x!=="object" || !x.name) continue;
-    if (!x.id) x.id = uid(cat==="loot" ? "ll" : cat==="spells" ? "lsp" : "ln");
+    if (!x.id) x.id = uid(cat==="loot" ? "ll" : cat==="spells" ? "lsp" : cat==="shops" ? "lsh" : "ln");
     const had = db[cat].find(y=>y.id===x.id), t = Date.now();
     if (had) { Object.assign(had, x); had.fbSent = had.fbEdited = t; updated++; } else { x.fbMade = x.fbSent = x.fbEdited = t; db[cat].push(x); added++; }
   }
@@ -446,11 +466,15 @@ view.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.ui) { const k = t.dataset.ui; ui[k] = k==="level" ? Math.max(1, Math.min(20, Math.round(+t.value) || 1)) : t.value; if (k==="level") t.value = ui.level;
     if (k==="type") ui.foe = "";
-    db.roll = Object.fromEntries(ROLL_KEYS.map(q=>[q, ui[q]])); save(); if (k==="type") render(); return; }
+    db.roll = Object.fromEntries(ROLL_KEYS.map(q=>[q, ui[q]])); save(); if (k==="type" || k==="kind") render(); return; }
   const x = entry(); if (!x) return;
   /* a spell's components, ticked: rebuilt into the usual "V, S, M (…)" */
   if (t.dataset.comp != null) { const on = k => !!(view.querySelector(`[data-comp="${k}"]`)||{}).checked, mat = view.querySelector("[data-compmat]");
     x.comp = Survey.compText({ v:on("v"), s:on("s"), m:on("m"), mat: mat ? mat.value.trim() : Survey.compParts(x.comp).mat }); touch(x); render(); return; }
+  if (t.dataset.soldat != null) { const s = new Set(x.soldAt||[]); if (t.checked) s.add(t.dataset.soldat); else s.delete(t.dataset.soldat); if (s.size) x.soldAt = [...s]; else delete x.soldAt; touch(x); render(); return; }
+  if (t.dataset.shopfrom != null) { const S = Survey.SHOP_TEMPLATES[t.value]; if (!S) return;
+    Object.assign(x, { keeper:S.keeper, staff:(S.staff||[])[0]||"", nmin:String(S.n[0]), nmax:String(S.n[1]), srd:S.srd.join("\n"), goods:S.goods.map(g=>g.join(" | ")).join("\n") });
+    if (!x.name) x.name = `${S.label} (yours)`; touch(x); render(); return; }
   /* a weapon picked for their attacks, worked out from their sheet the survey's way */
   if (t.dataset.weap != null) { const at = t.value && Survey.weaponAttack(x, t.value); if (!at) return; (x.attacks = x.attacks||[]).push(at); touch(x); render(); toast(`${at.name}: ${at.hit} to hit, ${at.dmg} ${at.dtype}.`); return; }
   /* Other… in a dropdown: type the new one */
@@ -481,13 +505,13 @@ view.addEventListener("click", e => {
     else if (r==="knows") x.knows = cap(pickOne(GEN_SECRET));
     else if (r==="backstory") x.backstory = rollBackstory();
     /* the whole person, rolled by the survey's own Someone to meet: stat block, hit points, spells, weapons, the lot */
-    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.role, species:ui.species, align:ui.align, type:ui.type || "Humanoid", foe:ui.foe });
+    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.kind ? "" : ui.role, kind:ui.kind || "", species:ui.species, align:ui.align, type:ui.type || "Humanoid", foe:ui.foe });
       if (g.kind!=="person") { toast(g.why || "Nothing to roll."); return; }
       for (const k of Object.keys(x)) delete x[k]; Object.assign(x, JSON.parse(JSON.stringify(g.person)), { id:keep }); openSecs.add("sheet"); }
     touch(x); render(); return;
   }
   const a = b.dataset.act;
-  if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
+  if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
     const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
   if (a==="back") { ui.draft = null; ui.open = null; save(true); render(); return; }
   if (a==="add" && ui.draft) {
@@ -512,7 +536,7 @@ view.addEventListener("click", e => {
   if (a==="copy") return void copyText();
   if (a==="import") { $("#fileIn").click(); return; }
   if (a==="wipe") { if (!confirm("Delete every item and person on this phone? Anything not sent is gone for good.") || !confirm("Really delete everything?")) return;
-    db.loot = []; db.npcs = []; save(true); render(); toast("Emptied."); return; }
+    db.loot = []; db.npcs = []; db.spells = []; db.shops = []; save(true); render(); toast("Emptied."); return; }
 });
 $("#fileIn").onchange = e => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => bringIn(String(r.result||"")); r.readAsText(f); e.target.value = ""; };
 $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return;
