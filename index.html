@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 15;
+const VERSION = 16;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -175,7 +175,7 @@ const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"")
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{} }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{}, lastCampaign:o.lastCampaign||"", campaigns:Array.isArray(o.campaigns) ? o.campaigns : [], campFilter:o.campFilter||"" }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -205,6 +205,16 @@ const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
 const toSend = () => allEntries().filter(changed).length;
 
+/* which campaign an entry is for: a box on every page (new ones start with the last campaign you typed); the lists
+   can show one campaign at a time; the survey brings in only what's for its own campaign (or for any) */
+const campaignsKnown = () => [...new Set([...(db.campaigns||[]), ...allEntries().map(x=>x.campaign).filter(Boolean)])].sort((a, b)=>a.localeCompare(b));
+const sameCamp = (a, b) => String(a||"").trim().toLowerCase()===String(b||"").trim().toLowerCase();
+const inFilter = x => !db.campFilter || (db.campFilter==="(none)" ? !x.campaign : sameCamp(x.campaign, db.campFilter));
+function campBox(x){
+  if (ui.draft && ui.draft.x===x && !x.fbCampSet){ x.fbCampSet = 1; if (db.lastCampaign && !x.campaign) x.campaign = db.lastCampaign; }
+  return `<label class="fld"><span>Campaign</span><input type="text" data-f="campaign" list="dl-camps" value="${esc(x.campaign||"")}" placeholder="Which campaign it's for (blank: any)"></label>
+    <datalist id="dl-camps">${campaignsKnown().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>`;
+}
 function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarity : "", x.value, x.dmg ? `${x.dmg}${x.dtype?" "+x.dtype:""}` : "", x.heal ? `heals ${x.heal}` : "", x.charges ? `${x.charges} charges` : "", x.attune ? "attunement" : ""].filter(Boolean).join(" · "); }
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
 function factionLine(x){ const E = Survey.factionEffects(x); return [x.align ? Survey.ALIGN_ABBR[x.align] || x.align : "", `standing ${Survey.sgn(E.s)} · ${E.tier.label.toLowerCase()}`, x.hidden ? "hidden from the players" : ""].filter(Boolean).join(" · "); }
@@ -223,12 +233,13 @@ function render(){
 }
 
 function listView(cat){
-  const q = ui.q.trim().toLowerCase(), list = db[cat].filter(x => !q || JSON.stringify(x).toLowerCase().includes(q));
+  const q = ui.q.trim().toLowerCase(), list = db[cat].filter(x => inFilter(x) && (!q || JSON.stringify(x).toLowerCase().includes(q)));
   return `<input class="search" type="text" data-q placeholder="Search your ${CAT_WORD[cat][1]}…" value="${esc(ui.q)}">
     <button class="btn wide main" data-act="new">+ ${CAT_WORD[cat][2]}</button>
     ${cat==="spells" ? `<div class="with" style="margin:-2px 0 12px"><input type="text" data-copyname list="dl-srdspells" placeholder="…or start from an SRD spell"><button class="btn" data-act="copysrd">Copy</button></div><datalist id="dl-srdspells">${Survey.SRD_SPELLS.map(s=>`<option value="${esc(s.name)}">`).join("")}</datalist>` : ""}
+    ${campaignsKnown().length ? `<select class="search" data-campf aria-label="Which campaign">${[["","All campaigns"], ...campaignsKnown().map(c=>[c, c]), ["(none)","No campaign set"]].map(([v, l])=>`<option value="${esc(v)}" ${db.campFilter===v?"selected":""}>${esc(l)}</option>`).join("")}</select>` : ""}
     ${list.length ? list.map(x => `<button class="card" data-open="${esc(x.id)}">${changed(x) ? `<span class="dot" title="Not sent yet"></span>` : ""}<span class="nm">${esc(x.name||"Unnamed")}</span>
-      ${lineOf(cat, x) ? `<span class="sub">${esc(lineOf(cat, x))}</span>` : ""}</button>`).join("")
+      ${(()=>{ const s = [lineOf(cat, x), !db.campFilter && x.campaign ? x.campaign : ""].filter(Boolean).join(" · "); return s ? `<span class="sub">${esc(s)}</span>` : ""; })()}</button>`).join("")
       : `<p class="empty">${q ? "Nothing matches." : `No ${CAT_WORD[cat][1]} yet. Make one, and send it to the survey from the Send tab.`}</p>`}
     ${list.length ? `<p class="note">A red dot: made or changed since you last sent.</p>` : ""}`;
 }
@@ -250,7 +261,7 @@ function sheetView(cat, x){
   const foot = draft
     ? `<div class="foot"><button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
     : `<div class="foot"><div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
-  return top + (draft ? `<div class="draft-mark">${body}</div>` : body) + foot;
+  return top + (draft ? `<div class="draft-mark">${campBox(x) + body}</div>` : campBox(x) + body) + foot;
 }
 
 function itemForm(x){
@@ -451,6 +462,7 @@ async function copyText(){
 }
 function bringIn(text){
   let o; try { o = JSON.parse(text); } catch (e) { toast("That isn't a Field Book file."); return; }
+  if (o && o.campaign && !campaignsKnown().some(c=>sameCamp(c, o.campaign))) db.campaigns = [...(db.campaigns||[]), String(o.campaign)];
   if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs) && !Array.isArray(o.spells) && !Array.isArray(o.shops) && !Array.isArray(o.factions))) { toast("No items or people in that file."); return; }
   let added = 0, updated = 0;
   for (const cat of ["loot","npcs","spells","shops","factions"]) for (const x of (o[cat]||[])) {
@@ -466,12 +478,14 @@ function bringIn(text){
 /* ── doing things ── */
 function touch(x){ x.fbEdited = Date.now(); if (db.spells.includes(x) || (ui.draft && ui.draft.cat==="spells" && ui.draft.x===x)) Survey.spellTidy(x); if (!ui.draft) save(); }
 function setField(x, k, v){
+  if (k==="campaign"){ v = String(v||"").trim(); if (v) db.lastCampaign = v; }
   if (k.startsWith("atk.")) { const [, j, f] = k.split("."); (x.attacks = x.attacks||[])[+j] = Object.assign(x.attacks[+j]||{}, { [f]:v }); }
   else if (k.startsWith("purse.")) { x.purse = x.purse||{}; const n = Math.max(0, Math.round(+v||0)); if (n) x.purse[k.slice(6)] = n; else delete x.purse[k.slice(6)]; }
   else if (v==="" || v===false) delete x[k];
   else x[k] = v;
 }
 const view = $("#view");
+view.addEventListener("change", e => { if (!e.target.matches("[data-campf]")) return; db.campFilter = e.target.value; save(); render(); });
 view.addEventListener("input", e => {
   const t = e.target;
   if (t.dataset.q != null) { ui.q = t.value; const at = t.selectionStart; render(); const s = $(".search"); if (s) { s.focus(); try { s.setSelectionRange(at, at); } catch (err) {} } return; }
