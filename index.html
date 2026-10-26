@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 13;
+const VERSION = 14;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -158,14 +158,16 @@ const DISPS = [["","Any"],["enemy","Enemy"],["neutral","Neutral"],["ally","Poten
 
 /* ── the survey's own roll tables and its roller: survey.js, built from Ordinate Survey's index.html by its Tools/build-fieldbook.ps1, so
    people roll here exactly as they do there (class stat block by level, hit points, a caster's spells and slots, weapons) ── */
-const { GEN_FIRST, GEN_FAMILY, GEN_NICK, GEN_SPECIES, GEN_LOOK, GEN_VOICE, GEN_WANTS, GEN_SECRET, ALIGNMENTS } = Survey;
+const { GEN_FIRST, GEN_FAMILY, GEN_NICK, GEN_SPECIES, GEN_LOOK, GEN_VOICE, GEN_WANTS, GEN_SECRET, ALIGNMENTS, genderFirst, fitList } = Survey;
 
 const pickOne = a => a[Math.floor(Math.random()*a.length)];
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const $ = s => document.querySelector(s);
 const uid = p => `${p}_fb${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const rollName = () => `${pickOne(GEN_FIRST)}${Math.random()<.25 ? ` "${pickOne(GEN_NICK)}"` : ""} ${pickOne(GEN_FAMILY)}`;
+/* a person's man or woman, from their sheet ("Man", "Woman", anything else = either) */
+const sexOf = x => /^w/i.test((x && x.gender) || "") ? "woman" : /^m/i.test((x && x.gender) || "") ? "man" : "";
+const rollName = sex => `${pickOne(genderFirst(sex))}${Math.random()<.25 ? ` "${pickOne(fitList(GEN_NICK, sex))}"` : ""} ${pickOne(GEN_FAMILY)}`;
 const rollBackstory = () => Survey.genBackstory();
 /* an alignment that suits the attitude (the survey's own weighting): enemies lean evil, allies good, every one possible */
 const rollAlignment = d => Survey.rollAlignment(d);
@@ -195,7 +197,7 @@ $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("da
 
 /* ── what's on screen ── */
 const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", kind:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
-const ROLL_KEYS = ["disp","level","role","kind","species","align","type","foe"];
+const ROLL_KEYS = ["disp","level","role","kind","species","gender","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
 const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"], factions:["faction","factions","New faction"] };
 const allEntries = () => [...db.loot, ...db.npcs, ...db.spells, ...db.shops, ...db.factions];
@@ -317,7 +319,8 @@ function rollPanel(){
     <label class="fld"><span>Type</span><select data-ui="type">${opt("Humanoid", "Humanoid: a person", ui.type)}${Survey.CREATURE_TYPES.filter(t=>t!=="Humanoid").map(t=>opt(t, t, ui.type)).join("")}</select></label>
     ${ui.type==="Humanoid" ? `<label class="fld"><span>Kind of person (what they do for a living)</span><select data-ui="kind">${Survey.kindOptions(ui.kind)}</select></label>` : ""}
     ${ui.type==="Humanoid" ? `<div class="row">${ui.kind ? "" : `<label class="fld"><span>Class</span><select data-ui="role">${Survey.roleOptions(ui.role)}</select></label>`}
-      <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>`
+      <label class="fld"><span>Species</span><select data-ui="species">${opt("", "Any", ui.species)}${GEN_SPECIES.map(s=>opt(s, s, ui.species)).join("")}</select></label></div>
+    <label class="fld"><span>Man or woman</span><select data-ui="gender">${opt("", "Either", ui.gender)}${opt("man", "Man", ui.gender)}${opt("woman", "Woman", ui.gender)}</select></label>`
       : `<label class="fld"><span>Which ${esc(ui.type.toLowerCase())}</span><select data-ui="foe">${Survey.creatureOptions(ui.type, ui.foe)}</select></label>`}
     <label class="fld"><span>Alignment</span><select data-ui="align">${opt("", "Any: one that fits the attitude", ui.align)}${ALIGNMENTS.map(a=>opt(a, a, ui.align)).join("")}</select></label>
     <button class="btn wide main" data-roll="whole">🎲 Roll someone</button>
@@ -371,6 +374,7 @@ function personForm(x){
       <datalist id="dl-foes">${Survey.SRD_FOES.map(f=>`<option value="${esc(f.name)}">`).join("")}</datalist>` : ""}
     ${sb ? `<p class="note">Built from the SRD <b>${esc(sb.name||"")}</b> stat block${m ? ` · CR ${esc(Survey.crLabel(m.cr))} · ${(m.xp||0).toLocaleString()} XP` : ""}. Numbers typed on the sheet win over it.</p>` : ""}
     ${SEC("sheet","Character sheet", `<div class="row"><label class="fld"><span>Species</span>${pickList("species", GEN_SPECIES, x.species)}</label><label class="fld"><span>Class</span>${pickList("cls", Survey.sheetClasses(), x.cls)}</label>${T(x,"level","Level","",.6,"number")}</div>
+      <div class="row"><label class="fld"><span>Gender</span>${pickList("gender", ["Man","Woman"], x.gender)}</label></div>
       <div class="row">${T(x,"ac","AC","",.7,"number")}${T(x,"hpMax","HP","",.7,"number")}${T(x,"speed","Speed","30",.8)}${T(x,"init","Init","+0",.7)}</div>
       <div class="abil">${ABILS.map(([k,l])=>`<label class="fld" style="margin:0"><span>${l}</span><input type="number" inputmode="numeric" data-f="${k}" value="${esc(x[k]??"")}" placeholder="10"><small class="mono" style="display:block;text-align:center;color:var(--ink-soft)" data-mod="${k}">${modOf(k)}</small></label>`).join("")}</div>
       ${T(x,"saves","Saving throws","Wis +5, Int +2")}${T(x,"skills","Skills and tools","Insight +5, Deception +4")}
@@ -496,7 +500,7 @@ view.addEventListener("change", e => {
   /* a weapon picked for their attacks, worked out from their sheet the survey's way */
   if (t.dataset.weap != null) { const at = t.value && Survey.weaponAttack(x, t.value); if (!at) return; (x.attacks = x.attacks||[]).push(at); touch(x); render(); toast(`${at.name}: ${at.hit} to hit, ${at.dmg} ${at.dtype}.`); return; }
   /* Other… in a dropdown: type the new one */
-  if (t.tagName==="SELECT" && t.value==="__other") { const k = t.dataset.f, v = prompt(k==="species" ? "Their species:" : k==="cls" ? "Their class:" : k==="time" ? "Casting time:" : "Type it:", x[k]||""); if (v!=null && v.trim()) x[k] = v.trim(); touch(x); render(); return; }
+  if (t.tagName==="SELECT" && t.value==="__other") { const k = t.dataset.f, v = prompt(k==="species" ? "Their species:" : k==="gender" ? "Their gender:" : k==="cls" ? "Their class:" : k==="time" ? "Casting time:" : "Type it:", x[k]||""); if (v!=null && v.trim()) x[k] = v.trim(); touch(x); render(); return; }
   if (t.dataset.fmode != null) { x.fightsAs = t.value==="block" ? (fightsWord(x.fightsAs)!=="self" && x.fightsAs ? x.fightsAs : "block") : t.value; if (!x.fightsAs) delete x.fightsAs; touch(x); render(); return; }
   /* a faction's alignment or standing: what it means, shown again */
   if (t.dataset.f && (t.dataset.f==="align" || t.dataset.f==="standing") && (db.factions.includes(x) || (ui.draft && ui.draft.cat==="factions"))) { setField(x, t.dataset.f, t.value); touch(x); render(); return; }
@@ -517,15 +521,15 @@ view.addEventListener("click", e => {
   const x = entry();
   if (b.dataset.roll && x) {
     const r = b.dataset.roll, d = ui.disp || pickOne(["enemy","neutral","ally"]);
-    if (r==="name") x.name = rollName();
+    if (r==="name") x.name = rollName(sexOf(x));
     else if (r==="align") x.align = rollAlignment(ui.disp);
-    else if (r==="look") x.look = cap(pickOne(GEN_LOOK));
+    else if (r==="look") x.look = cap(pickOne(fitList(GEN_LOOK, sexOf(x))));
     else if (r==="voice") x.voice = cap(pickOne(GEN_VOICE));
     else if (r==="wants") x.wants = cap(pickOne(GEN_WANTS[d]));
     else if (r==="knows") x.knows = cap(pickOne(GEN_SECRET));
     else if (r==="backstory") x.backstory = rollBackstory();
     /* the whole person, rolled by the survey's own Someone to meet: stat block, hit points, spells, weapons, the lot */
-    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.kind ? "" : ui.role, kind:ui.kind || "", species:ui.species, align:ui.align, type:ui.type || "Humanoid", foe:ui.foe });
+    else if (r==="whole") { const keep = x.id, g = Survey.genPerson({ level:+ui.level || 3, disp:ui.disp, role:ui.kind ? "" : ui.role, kind:ui.kind || "", species:ui.species, gender:ui.gender || "", align:ui.align, type:ui.type || "Humanoid", foe:ui.foe });
       if (g.kind!=="person") { toast(g.why || "Nothing to roll."); return; }
       for (const k of Object.keys(x)) delete x[k]; Object.assign(x, JSON.parse(JSON.stringify(g.person)), { id:keep }); openSecs.add("sheet"); }
     touch(x); render(); return;
