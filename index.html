@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 14;
+const VERSION = 15;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -374,7 +374,7 @@ function personForm(x){
       <datalist id="dl-foes">${Survey.SRD_FOES.map(f=>`<option value="${esc(f.name)}">`).join("")}</datalist>` : ""}
     ${sb ? `<p class="note">Built from the SRD <b>${esc(sb.name||"")}</b> stat block${m ? ` · CR ${esc(Survey.crLabel(m.cr))} · ${(m.xp||0).toLocaleString()} XP` : ""}. Numbers typed on the sheet win over it.</p>` : ""}
     ${SEC("sheet","Character sheet", `<div class="row"><label class="fld"><span>Species</span>${pickList("species", GEN_SPECIES, x.species)}</label><label class="fld"><span>Class</span>${pickList("cls", Survey.sheetClasses(), x.cls)}</label>${T(x,"level","Level","",.6,"number")}</div>
-      <div class="row"><label class="fld"><span>Gender</span>${pickList("gender", ["Man","Woman"], x.gender)}</label></div>
+      <div class="row"><label class="fld"><span>Gender</span>${pickList("gender", ["Man","Woman"], x.gender)}</label>${CHK(x, "known", "The party knows their name (it shows under their token on the TV)")}</div>
       <div class="row">${T(x,"ac","AC","",.7,"number")}${T(x,"hpMax","HP","",.7,"number")}${T(x,"speed","Speed","30",.8)}${T(x,"init","Init","+0",.7)}</div>
       <div class="abil">${ABILS.map(([k,l])=>`<label class="fld" style="margin:0"><span>${l}</span><input type="number" inputmode="numeric" data-f="${k}" value="${esc(x[k]??"")}" placeholder="10"><small class="mono" style="display:block;text-align:center;color:var(--ink-soft)" data-mod="${k}">${modOf(k)}</small></label>`).join("")}</div>
       ${T(x,"saves","Saving throws","Wis +5, Int +2")}${T(x,"skills","Skills and tools","Insight +5, Deception +4")}

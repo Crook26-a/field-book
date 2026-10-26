@@ -1,4 +1,4 @@
-/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-10-26 14:46). Don't edit by hand:
+/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-10-26 15:06). Don't edit by hand:
    change the survey and build again. 145 pieces of the survey's code and the SRD 5.2 data. */
 const Survey = (() => {
 "use strict";
