@@ -139,7 +139,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 17;
+const VERSION = 18;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -214,8 +214,11 @@ const sameCamp = (a, b) => String(a||"").trim().toLowerCase()===String(b||"").tr
 const inFilter = x => !db.campFilter || (db.campFilter==="(none)" ? !x.campaign : sameCamp(x.campaign, db.campFilter));
 function campBox(x){
   if (ui.draft && ui.draft.x===x && !x.fbCampSet){ x.fbCampSet = 1; if (db.lastCampaign && !x.campaign) x.campaign = db.lastCampaign; }
-  return `<label class="fld"><span>Campaign</span><input type="text" data-f="campaign" list="dl-camps" value="${esc(x.campaign||"")}" placeholder="Which campaign it's for (blank: any)"></label>
-    <datalist id="dl-camps">${campaignsKnown().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>`;
+  /* a dropdown (Joseph, 2026-10-28): the campaigns the phone knows (each survey sends its name), Any, or a new one */
+  const C = campaignsKnown(), cur = String(x.campaign||"").trim(), opts = [["", "Any campaign"], ...C.map(c=>[c, c])];
+  if (cur && !C.some(c=>sameCamp(c, cur))) opts.push([cur, cur]);
+  return `<label class="fld"><span>Campaign</span><select data-f="campaign">${opts.map(([v, l])=>`<option value="${esc(v)}" ${(v ? sameCamp(v, cur) : !cur) ? "selected" : ""}>${esc(l)}</option>`).join("")}<option value="__other">New campaign…</option></select></label>
+    ${C.length ? "" : `<p class="note">No campaigns yet. In the survey, Data → This campaign → Send the name to the Field Book, then Send → Bring a file in here. Or pick New campaign….</p>`}`;
 }
 function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarity : "", x.value, x.dmg ? `${x.dmg}${x.dtype?" "+x.dtype:""}` : "", x.heal ? `heals ${x.heal}` : "", x.charges ? `${x.charges} charges` : "", x.attune ? "attunement" : ""].filter(Boolean).join(" · "); }
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
@@ -465,7 +468,8 @@ async function copyText(){
 }
 function bringIn(text){
   let o; try { o = JSON.parse(text); } catch (e) { toast("That isn't a Field Book file."); return; }
-  if (o && o.campaign && !campaignsKnown().some(c=>sameCamp(c, o.campaign))) db.campaigns = [...(db.campaigns||[]), String(o.campaign)];
+  const newCamp = !!(o && o.campaign && !campaignsKnown().some(c=>sameCamp(c, o.campaign)));
+    if (o && o.campaign && !campaignsKnown().some(c=>sameCamp(c, o.campaign))) db.campaigns = [...(db.campaigns||[]), String(o.campaign)];
   if (!o || (!Array.isArray(o.loot) && !Array.isArray(o.npcs) && !Array.isArray(o.spells) && !Array.isArray(o.shops) && !Array.isArray(o.factions))) { toast("No items or people in that file."); return; }
   let added = 0, updated = 0;
   for (const cat of ["loot","npcs","spells","shops","factions"]) for (const x of (o[cat]||[])) {
@@ -475,7 +479,7 @@ function bringIn(text){
     const had = db[cat].find(y=>y.id===x.id), t = Date.now();
     if (had) { Object.assign(had, x); had.fbSent = had.fbEdited = t; updated++; } else { x.fbMade = x.fbSent = x.fbEdited = t; db[cat].push(x); added++; }
   }
-  save(true); render(); toast(added || updated ? `Brought in: ${added} new, ${updated} updated.` : "Nothing new in that file.");
+  save(true); render(); toast(added || updated ? `Brought in: ${added} new, ${updated} updated.` : newCamp ? `Added the campaign "${o.campaign}".` : "Nothing new in that file.");
 }
 
 /* ── doing things ── */
@@ -517,7 +521,7 @@ view.addEventListener("change", e => {
   /* a weapon picked for their attacks, worked out from their sheet the survey's way */
   if (t.dataset.weap != null) { const at = t.value && Survey.weaponAttack(x, t.value); if (!at) return; (x.attacks = x.attacks||[]).push(at); touch(x); render(); toast(`${at.name}: ${at.hit} to hit, ${at.dmg} ${at.dtype}.`); return; }
   /* Other… in a dropdown: type the new one */
-  if (t.tagName==="SELECT" && t.value==="__other") { const k = t.dataset.f, v = prompt(k==="species" ? "Their species:" : k==="gender" ? "Their gender:" : k==="cls" ? "Their class:" : k==="time" ? "Casting time:" : "Type it:", x[k]||""); if (v!=null && v.trim()) x[k] = v.trim(); touch(x); render(); return; }
+  if (t.tagName==="SELECT" && t.value==="__other") { const k = t.dataset.f, v = prompt(k==="campaign" ? "The campaign's name, as it's set in the survey:" : k==="species" ? "Their species:" : k==="gender" ? "Their gender:" : k==="cls" ? "Their class:" : k==="time" ? "Casting time:" : "Type it:", x[k]||""); if (v!=null && v.trim()) { setField(x, k, v.trim()); if (k==="campaign" && !(db.campaigns||[]).some(c=>sameCamp(c, v))) db.campaigns = [...(db.campaigns||[]), v.trim()]; } touch(x); render(); return; }
   if (t.dataset.fmode != null) { x.fightsAs = t.value==="block" ? (fightsWord(x.fightsAs)!=="self" && x.fightsAs ? x.fightsAs : "block") : t.value; if (!x.fightsAs) delete x.fightsAs; touch(x); render(); return; }
   /* a faction's alignment or standing: what it means, shown again */
   if (t.dataset.f && (t.dataset.f==="align" || t.dataset.f==="standing") && (db.factions.includes(x) || (ui.draft && ui.draft.cat==="factions"))) { setField(x, t.dataset.f, t.value); touch(x); render(); return; }
