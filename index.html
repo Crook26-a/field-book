@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 21;
+const VERSION = 22;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -316,7 +316,11 @@ function itemForm(x){
       <div class="row">${T(x,"regain","Charges back","1d4, or all",.8)}${SEL(x,"regainWhen","When",REGAIN_WHEN,1.3)}</div>
       ${CHK(x,"usedUp","Used up when empty (a potion, a scroll, a bomb)")}
       <div class="row">${T(x,"heal","Heals","2d4+2")}${T(x,"tempHp","Temp HP","1d4")}</div>
-      ${SEL(x,"cond","Puts on",CONDITIONS,1,"No condition")}`, [x.use, x.heal ? `heals ${x.heal}` : ""].filter(Boolean).join(" · "))}
+      ${SEL(x,"cond","Puts on",CONDITIONS,1,"No condition")}
+      <div class="row">${T(x,"reduce","Reduces damage","1d6+Wis")}${T(x,"reduceSelf","On yourself","Wis",.7)}</div>
+      ${SEL(x,"reduceType","Only this type",DAMAGE_TYPES,1,"Any damage")}
+      ${CHK(x,"reduceHalf","Takes off no more than half the damage")}
+      <p class="note">Reduces damage: used right after a hit (usually a Reaction), it gives back what it takes off. Write an ability for its modifier ("1d6+Wis", "1d8+Cha"); "On yourself" is the amount when the one hit is whoever uses it (empty: the same).</p>`, [x.use, x.heal ? `heals ${x.heal}` : "", x.tempHp ? `${x.tempHp} temp HP` : "", x.reduce ? `takes ${x.reduce} off` : ""].filter(Boolean).join(" · "))}
     ${(() => { const on = x.soldAt || [], kinds = [...Object.entries(Survey.SHOP_TEMPLATES).map(([id, s])=>[id, s.label]), ...db.shops.map(s=>[s.id, s.name||"Shop"])];
       return SEC("sold","Sold at", `<p class="note">Tick the kinds of shop that sell it: it can turn up in their stock in the survey.</p>
         <div class="row" style="flex-wrap:wrap;gap:0 12px">${kinds.map(([id, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-soldat="${esc(id)}" ${on.includes(id)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`,
