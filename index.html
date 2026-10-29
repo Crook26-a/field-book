@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 23;
+const VERSION = 24;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -322,7 +322,7 @@ function itemForm(x){
       ${CHK(x,"reduceHalf","Takes off no more than half the damage")}
       <p class="note">Reduces damage: used right after a hit (usually a Reaction), it gives back what it takes off. Write an ability for its modifier ("1d6+Wis", "1d8+Cha"); "On yourself" is the amount when the one hit is whoever uses it (empty: the same).</p>
       <div class="row">${T(x,"onHit","On a hit, for a charge","1d4+Str")}${SEL(x,"onHitType","Its type",DAMAGE_TYPES,1,"Same as the weapon")}</div>
-      ${CHK(x,"onHitHeal","Heals the wielder half of it")}
+      ${SEL(x,"onHitHeal","Heals the wielder",[["half","Half of it"],["all","All of it"]],1,"No")}
       ${CHK(x,"onHitBa","Takes the wielder's Bonus Action")}
       <p class="note">On a hit: extra damage when whoever carries it hits, once a turn, spending a charge (in the survey it's a chip in a fight's action form). Charges back "By paying hit points": Charges back is the hit points a charge costs.</p>`, [x.use, x.heal ? `heals ${x.heal}` : "", x.tempHp ? `${x.tempHp} temp HP` : "", x.reduce ? `takes ${x.reduce} off` : "", x.onHit ? `+${x.onHit} on a hit` : ""].filter(Boolean).join(" · "))}
     ${(() => { const on = x.soldAt || [], kinds = [...Object.entries(Survey.SHOP_TEMPLATES).map(([id, s])=>[id, s.label]), ...db.shops.map(s=>[s.id, s.name||"Shop"])];
