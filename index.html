@@ -50,6 +50,12 @@
     border-radius: 3px; padding: 10px 12px; font: inherit; font-size: 15px; cursor: pointer; min-height: 44px; }
   .btn:active { background: var(--paper-deep); }
   .btn.wide { width: 100%; margin: 0 0 10px; }
+  /* a card for the players, over the screen */
+  #cardov { position: fixed; inset: 0; z-index: 50; background: rgba(20,15,8,.72); display: flex; align-items: center; justify-content: center; padding: 14px; }
+  #cardov[hidden] { display: none; }
+  #cardov .cardbox { display: flex; flex-direction: column; gap: 10px; align-items: center; width: min(420px, 100%); max-height: 100%; overflow: auto; }
+  #cardov img { width: 100%; max-height: 72vh; object-fit: contain; }
+  #cardov .row { width: 100%; }
   .btn.main { background: var(--ink); color: var(--paper-lit); border-color: var(--ink); }
   .btn.danger { color: var(--lead); border-color: var(--lead); }
   .btn.small { min-height: 36px; padding: 6px 10px; font-size: 14px; }
@@ -130,6 +136,7 @@
 </div>
 <nav class="tabs" id="tabs"></nav>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="cardov" hidden><div class="cardbox" role="dialog" aria-modal="true" aria-label="A card for the players"></div></div>
 <div id="ver" aria-hidden="true"></div>
 <input type="file" id="fileIn" accept=".json,.txt,application/json,text/plain" hidden>
 <script>/* what survey.js asks the phone for: its library, and the level to roll at */
@@ -139,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 19;
+const VERSION = 20;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -190,6 +197,26 @@ window.addEventListener("pagehide", () => save(true));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(true); });
 
 let toastTimer = null;
+/* a card for the players (2026-10-28): the survey's own card, drawn here, shared to a player's phone or saved */
+let cardNow = null;
+async function showCard(cat, x){
+  const blob = await Survey.cardBlob(cat, x); if (!blob) { toast("No card for this."); return; }
+  if (cardNow) URL.revokeObjectURL(cardNow.url);
+  cardNow = { blob, url:URL.createObjectURL(blob), name:Survey.cardFileName(x) };
+  $("#cardov .cardbox").innerHTML = `<img src="${cardNow.url}" alt="${esc(x.name||"")}">
+    <div class="row"><button class="btn main" style="flex:2" data-card="share">Share the picture</button><button class="btn" style="flex:1" data-card="close">Close</button></div>
+    <p class="note" style="color:#f5ecd6;text-align:center;margin:0">Only what the players may see. Text it, AirDrop it, or hold up the phone.</p>`;
+  $("#cardov").hidden = false;
+}
+document.addEventListener("click", async e => {
+  const ov = $("#cardov"); if (ov.hidden || !ov.contains(e.target)) return;
+  const b = e.target.closest("[data-card]");
+  if (e.target===ov || (b && b.dataset.card==="close")) { ov.hidden = true; return; }
+  if (!b || b.dataset.card!=="share" || !cardNow) return;
+  const f = new File([cardNow.blob], cardNow.name, { type:"image/png" });
+  if (navigator.canShare && navigator.canShare({ files:[f] })) { try { await navigator.share({ files:[f], title:cardNow.name }); return; } catch (err) { if (err && err.name==="AbortError") return; } }
+  const a = document.createElement("a"); a.href = cardNow.url; a.download = cardNow.name; document.body.appendChild(a); a.click(); a.remove(); toast(`Saved ${cardNow.name}.`);
+});
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 3200); }
 
 /* ── light or dark: follows the phone until you pick ── */
@@ -263,9 +290,10 @@ function sheetView(cat, x){
   const top = `<div class="sheet-top"><button class="btn small" data-act="back">‹ ${draft ? "Cancel" : word[1].charAt(0).toUpperCase()+word[1].slice(1)}</button>
     <div class="ttl"><b id="ttl">${esc(x.name || word[2])}</b>${draft ? `<small>not added yet</small>` : ""}</div></div>`;
   const body = cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : cat==="factions" ? factionForm(x) : personForm(x);
+  const card = ["loot","spells","npcs","factions"].includes(cat) ? `<button class="btn wide" data-act="card">${draft ? "See its card" : "Card for the players"}</button>` : "";
   const foot = draft
-    ? `<div class="foot"><button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
-    : `<div class="foot"><div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
+    ? `<div class="foot">${card}<button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
+    : `<div class="foot">${card}<div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
   return top + (draft ? `<div class="draft-mark">${campBox(x) + body}</div>` : campBox(x) + body) + foot;
 }
 
@@ -559,6 +587,7 @@ view.addEventListener("click", e => {
   if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : cat==="factions" ? { id:uid("lfa"), name:"", align:"", standing:0 } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
     const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
   if (a==="back") { ui.draft = null; ui.open = null; save(true); render(); return; }
+  if (a==="card" && x) { showCard(ui.draft ? ui.draft.cat : ui.tab, x); return; }
   if (a==="add" && ui.draft) {
     const d = ui.draft.x; d.name = String(d.name||"").trim();
     if (!d.name) { toast("Give it a name first."); const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
