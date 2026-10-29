@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 22;
+const VERSION = 23;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -155,7 +155,7 @@ const LOOT_KINDS = ["curio","gear","weapon","armor","tool","potion","scroll","po
 const RARITIES = ["Mundane","Common","Uncommon","Rare","Very Rare","Legendary","Artifact"];
 const RARITY_GP = { common:100, uncommon:400, rare:4000, "very rare":40000, legendary:200000 };
 const ITEM_USES = ["Action","Bonus Action","Magic action","Utilize action","Reaction","No action"];
-const REGAIN_WHEN = [["dawn","At dawn"],["long","After a Long Rest"],["rest","After a Short or Long Rest"]];
+const REGAIN_WHEN = [["dawn","At dawn"],["long","After a Long Rest"],["rest","After a Short or Long Rest"],["hp","By paying hit points (Charges back: HP a charge)"]];
 const CONDITIONS = ["Blinded","Charmed","Deafened","Exhaustion","Frightened","Grappled","Incapacitated","Invisible",
   "Paralyzed","Petrified","Poisoned","Prone","Restrained","Stunned","Unconscious"];
 const DAMAGE_TYPES = ["acid","bludgeoning","cold","fire","force","lightning","necrotic","piercing","poison","psychic","radiant","slashing","thunder"];
@@ -320,7 +320,11 @@ function itemForm(x){
       <div class="row">${T(x,"reduce","Reduces damage","1d6+Wis")}${T(x,"reduceSelf","On yourself","Wis",.7)}</div>
       ${SEL(x,"reduceType","Only this type",DAMAGE_TYPES,1,"Any damage")}
       ${CHK(x,"reduceHalf","Takes off no more than half the damage")}
-      <p class="note">Reduces damage: used right after a hit (usually a Reaction), it gives back what it takes off. Write an ability for its modifier ("1d6+Wis", "1d8+Cha"); "On yourself" is the amount when the one hit is whoever uses it (empty: the same).</p>`, [x.use, x.heal ? `heals ${x.heal}` : "", x.tempHp ? `${x.tempHp} temp HP` : "", x.reduce ? `takes ${x.reduce} off` : ""].filter(Boolean).join(" · "))}
+      <p class="note">Reduces damage: used right after a hit (usually a Reaction), it gives back what it takes off. Write an ability for its modifier ("1d6+Wis", "1d8+Cha"); "On yourself" is the amount when the one hit is whoever uses it (empty: the same).</p>
+      <div class="row">${T(x,"onHit","On a hit, for a charge","1d4+Str")}${SEL(x,"onHitType","Its type",DAMAGE_TYPES,1,"Same as the weapon")}</div>
+      ${CHK(x,"onHitHeal","Heals the wielder half of it")}
+      ${CHK(x,"onHitBa","Takes the wielder's Bonus Action")}
+      <p class="note">On a hit: extra damage when whoever carries it hits, once a turn, spending a charge (in the survey it's a chip in a fight's action form). Charges back "By paying hit points": Charges back is the hit points a charge costs.</p>`, [x.use, x.heal ? `heals ${x.heal}` : "", x.tempHp ? `${x.tempHp} temp HP` : "", x.reduce ? `takes ${x.reduce} off` : "", x.onHit ? `+${x.onHit} on a hit` : ""].filter(Boolean).join(" · "))}
     ${(() => { const on = x.soldAt || [], kinds = [...Object.entries(Survey.SHOP_TEMPLATES).map(([id, s])=>[id, s.label]), ...db.shops.map(s=>[s.id, s.name||"Shop"])];
       return SEC("sold","Sold at", `<p class="note">Tick the kinds of shop that sell it: it can turn up in their stock in the survey.</p>
         <div class="row" style="flex-wrap:wrap;gap:0 12px">${kinds.map(([id, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-soldat="${esc(id)}" ${on.includes(id)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`,
