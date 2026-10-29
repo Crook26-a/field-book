@@ -1,4 +1,4 @@
-/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-10-28 19:14). Don't edit by hand:
+/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-10-29 07:27). Don't edit by hand:
    change the survey and build again. 174 pieces of the survey's code and the SRD 5.2 data. */
 const Survey = (() => {
 "use strict";
@@ -247,7 +247,7 @@ const cardText = t => String(t||"").split(/\n+/).map(l=>l.trim()).filter(l=>l &&
 /* what goes on the card: a coloured band, the name, a line under it, short rows, the text, and a foot */
 function cardOf(cat, x){
   if(!x) return null;
-  const P = (text, label) => text ? { label:label||"", text:String(text) } : null, body = t => cardText(t).map(l=>P(l));
+  const P = (text, label) => text ? { label:label||"", text:String(text) } : null, body = t => cardText(t).map(l=>{ const m = /^([A-Z][\w'’ -]{1,28}):\s+(.+)$/.exec(l); return m ? P(m[2].charAt(0).toUpperCase() + m[2].slice(1), m[1] + ".") : P(l); });   // "Stilled Heart: when…" leads with its name in bold, as the SRD sets it
   if(cat==="loot"){
     const rar = x.rarity && x.rarity!=="Mundane" ? x.rarity : "", by = /attunement\s+(by .+?)\.?$/i.exec(String(x.att||""));
     const back = x.regain ? `, ${x.regain} back ${(REGAIN_WHEN.find(r=>r[0]===regainWhenOf(x))||["", "at dawn"])[1].toLowerCase()}` : "";
@@ -256,7 +256,7 @@ function cardOf(cat, x){
       rows:[["Damage", x.dmg ? `${x.dmg}${x.dtype?` ${x.dtype}`:""}` : ""], ["Bonus", x.hit ? `${x.hit} to attack and damage` : ""], ["Properties", x.props], ["Range", x.range],
         ["Armor Class", x.ac], ["Charges", x.charges ? `${x.charges}${back}` : ""], ["Use", x.use ? `${x.use}${x.perUse && +x.perUse!==1 ? `, ${x.perUse} charges` : ""}` : ""],
         ["Heals", x.heal], ["Temp HP", x.tempHp], ["Leaves them", x.cond]].filter(r=>r[1]),
-      body:[...body(x.desc), P(x.effect)].filter(Boolean), foot:[x.wt ? `${x.wt} lb` : "", x.value].filter(Boolean).join(" · ") };
+      body:[...body(x.desc), ...body(x.effect)].filter(Boolean), foot:[+x.wt ? `${x.wt} lb` : "", x.value].filter(Boolean).join(" · ") };
   }
   if(cat==="spells") return { colour:CARD_SCHOOL[x.school] || "#3d4f7a", band:`${x.lv ? `Level ${x.lv}` : "Cantrip"}${x.school ? ` · ${x.school}` : ""}`, title:x.name || "A spell",
     sub:[x.conc ? "Concentration" : "", x.rit ? "Ritual" : ""].filter(Boolean).join(" · "),
