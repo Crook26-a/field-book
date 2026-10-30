@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 25;
+const VERSION = 26;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -282,6 +282,11 @@ const T = (x, k, label, ph, flex, type) => `<label class="fld" style="flex:${fle
 const TA = (x, k, label, ph, rows, dice) => `<label class="fld"><span>${label}</span><div class="with"><textarea data-f="${k}" rows="${rows||3}" placeholder="${esc(ph||"")}">${esc(x[k]||"")}</textarea>${dice?`<button class="btn dice" data-roll="${dice}" aria-label="Roll one" title="Roll one">🎲</button>`:""}</div></label>`;
 const SEL = (x, k, label, opts, flex, blank) => `<label class="fld" style="flex:${flex||1}"><span>${label}</span><select data-f="${k}">${blank!=null?`<option value="">${esc(blank)}</option>`:""}${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(v)===String(x[k]??"")?"selected":""}>${esc(l)}</option>`; }).join("")}</select></label>`;
 const CHK = (x, k, label) => `<label class="check"><input type="checkbox" data-f="${k}" ${x[k]?"checked":""}> ${label}</label>`;
+/* the tactics dials (2026-10-30), as in the survey: empty = worked out from the stat block */
+const FB_TAC = { role:[["front","Front-liner: wades in"],["skirm","Skirmisher: hits and moves"],["ranged","Ranged: keeps its distance"],["caster","Caster: stays back"],["support","Support: helps an ally"],["lurker","Lurker: hides, strikes first"]],
+  aim:[["nearest","The nearest (mindless)"],["grudge","Whoever hurt it most"],["weakest","The weakest"],["strongest","The strongest in reach"]], rigid:[[1,"Loosely"],[2,"Normally"],[3,"Rigidly"]],
+  courage:[[1,"1 Cowardly"],[2,"2 Cautious"],[3,"3 Steady"],[4,"4 Brave"],[5,"5 Fearless"]] };
+const TSEL = (x, f, label, opts, flex) => `<label class="fld" style="flex:${flex||1}"><span>${label}</span><select data-f="tac.${f}"><option value="">From its stat block</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v)===String((x.tac||{})[f] ?? "")?"selected":""}>${esc(l)}</option>`).join("")}</select></label>`;
 const SEC = (key, title, body, extra, open) => `<details class="sec" data-sec="${key}" ${open || openSecs.has(key) ? "open" : ""}><summary>${title}${extra?`<small>${esc(extra)}</small>`:""}</summary>${body}</details>`;
 const openSecs = new Set();
 
@@ -420,6 +425,9 @@ function personForm(x){
     ${TA(x,"voice","Voice","Calls everyone “minnow”",2,"voice")}
     ${TA(x,"wants","Wants","",2,"wants")}
     ${TA(x,"knows","Knows (or hides)","A secret, a rumor, a way in…",2,"knows")}
+    ${TA(x,"tactics","Tactics: how they fight (DM only)","Wades in front, picks the biggest threat and holds the line…",2)}
+    <div class="row">${TSEL(x,"role","Fights as",FB_TAC.role,1.2)}${TSEL(x,"aim","Goes for",FB_TAC.aim,1.4)}</div>
+    <div class="row">${TSEL(x,"rigid","Holds to it",FB_TAC.rigid)}${TSEL(x,"courage","Courage",FB_TAC.courage,1.4)}</div>
     ${TA(x,"backstory","Backstory","Where they're from, how they came to this, what they hope for…",4,"backstory")}
     ${CHK(x,"spare","A spare: nobody yet (an enemy in a fight can be given this name and story)")}
     <label class="fld"><span>Fights as</span><select data-fmode>${[["","Doesn't fight"],["self","Their own sheet (below)"],["block","An SRD stat block"]].map(([v,l])=>`<option value="${v}" ${v===fmode?"selected":""}>${l}</option>`).join("")}</select></label>
@@ -524,6 +532,7 @@ function setField(x, k, v){
   if (k==="campaign"){ v = String(v||"").trim(); if (v) db.lastCampaign = v; }
   if (k.startsWith("atk.")) { const [, j, f] = k.split("."); (x.attacks = x.attacks||[])[+j] = Object.assign(x.attacks[+j]||{}, { [f]:v }); }
   else if (k.startsWith("purse.")) { x.purse = x.purse||{}; const n = Math.max(0, Math.round(+v||0)); if (n) x.purse[k.slice(6)] = n; else delete x.purse[k.slice(6)]; }
+  else if (k.startsWith("tac.")) { const f = k.slice(4); x.tac = x.tac||{}; if (v==="" || v==null) delete x.tac[f]; else x.tac[f] = (f==="rigid" || f==="courage") ? +v : v; if (!Object.keys(x.tac).length) delete x.tac; }     // the tactics dials (2026-10-30)
   else if (v==="" || v===false) delete x[k];
   else x[k] = v;
 }
