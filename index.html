@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 27;
+const VERSION = 28;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -313,6 +313,7 @@ function itemForm(x){
     ${SEC("stats","Item stats", `<p class="note">All optional. With damage, whoever carries it can attack with it in a fight; the magic bonus adds to their attack and damage.</p>
       <div class="row">${T(x,"dmg","Damage","1d8+1")}${SEL(x,"dtype","Type",DAMAGE_TYPES,1,"—")}</div>
       <div class="row">${T(x,"hit","Magic bonus","+1",.8)}${T(x,"range","Range","20/60 ft.")}</div>
+      ${SEL(x,"abil","Modifier",[["str","Strength"],["dex","Dexterity"],["con","Constitution"],["int","Intelligence"],["wis","Wisdom"],["cha","Charisma"],["none","None"]],1,"Worked out (Str; Dex if finesse or ranged)")}
       ${T(x,"props","Properties","Finesse, Light, Thrown")}
       <div class="row">${T(x,"ac","Armor Class","+1, or 14 + Dex")}${T(x,"charges","Charges","3",.6,"number")}</div>
       ${TA(x,"effect","What it does","Glows in the dark. Once a day, the wielder can…",3)}`, [x.dmg, x.ac ? `AC ${x.ac}` : "", x.charges ? `${x.charges} charges` : ""].filter(Boolean).join(" · "))}
