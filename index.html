@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 26;
+const VERSION = 27;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -404,6 +404,22 @@ function spellForm(x){
     ${TA(x,"notes","Notes","",2)}`;
 }
 const spellNames = () => `<datalist id="dl-allspells">${Survey.allSpells().map(s=>`<option value="${esc(s.name)}">`).join("")}</datalist>`;
+/* the spell picker (2026-10-30, as in the survey): typing searches the SRD and your spells (name, level, school, SRD or
+   yours; tap one to add it); a name that's neither can be added as your own new spell */
+function spellResults(inp){
+  const row = inp.parentElement; let box = row.nextElementSibling;
+  if (!box || !box.classList.contains("spres")) { box = document.createElement("div"); box.className = "spres"; box.style.cssText = "display:grid;gap:2px;margin:-4px 0 8px"; row.after(box); }
+  const q = inp.value.trim().toLowerCase(); if (!q) { box.innerHTML = ""; return; }
+  const own = new Set(db.spells.map(s=>s.id)), starts = s => s.name.toLowerCase().startsWith(q) ? 0 : 1, ord = n => [, "1st", "2nd", "3rd"][n] || n + "th";
+  const hits = Survey.allSpells().filter(s=>String(s.name||"").toLowerCase().includes(q)).sort((a, b)=>starts(a) - starts(b) || a.name.localeCompare(b.name)).slice(0, 8);
+  const exact = hits.some(s=>s.name.toLowerCase()===q), it = (nm, html) => `<button type="button" class="btn" style="text-align:left" data-spres="${esc(nm)}">${html}</button>`;
+  box.innerHTML = hits.map(s=>it(s.name, `${esc(s.name)} <small>${+s.lv ? ord(+s.lv) + " level" : "cantrip"}${s.school ? " " + esc(String(s.school).toLowerCase()) : ""} · ${own.has(s.id) ? "yours" : "SRD"}</small>`)).join("")
+    + (exact ? "" : it(inp.value.trim(), `<b>+ Add “${esc(inp.value.trim())}”</b> <small>as your own new spell</small>`));
+}
+document.addEventListener("input", e=>{ const t = e.target; if (t.matches && t.matches("[data-spname]")) spellResults(t); });
+document.addEventListener("click", e=>{ const b = e.target.closest && e.target.closest("[data-spres]"); if (!b) return; e.preventDefault();
+  const box = b.closest(".spres"), row = box && box.previousElementSibling, inp = row && row.querySelector("[data-spname]"), add = row && row.querySelector("button");
+  if (!inp || !add) return; inp.value = b.dataset.spres; box.innerHTML = ""; add.click(); });
 /* a dropdown on the sheet, as in the survey: the list, whatever's already there kept as its own choice, and Other… to type one */
 function pickList(k, list, cur){
   const has = !cur || list.includes(cur);
@@ -448,7 +464,7 @@ function personForm(x){
       <div class="with" style="margin:0 0 10px"><select data-weap><option value="">Add a weapon attack…</option>${Survey.attackWeapons().map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select><button class="btn" data-act="atkadd" title="A blank row: a claw, a spell, a thrown bottle">Other</button></div>
       <p class="note" style="margin-top:-6px">A weapon's to-hit and damage come from their Strength or Dexterity and proficiency bonus (2024 rules).</p>
       <p class="lab" style="margin:6px 0 6px">Spells</p>
-      <div class="with" style="margin:0 0 8px"><input type="text" data-spname list="dl-allspells" placeholder="Add a spell by name (SRD or yours)…"><button class="btn" data-act="spadd">Add</button></div>${spellNames()}
+      <div class="with" style="margin:0 0 8px"><input type="text" data-spname list="dl-allspells" placeholder="Search the SRD and your spells, or type a new one…"><button class="btn" data-act="spadd">Add</button></div>${spellNames()}
       ${spells.length ? `${spells.map(s=>`<div class="row" style="align-items:center;margin:0 0 6px"><span style="flex:1">${esc(s.name)} <small class="mono" style="color:var(--ink-soft)">${s.lv ? `level ${s.lv}` : "cantrip"}</small></span><button class="btn small danger" data-act="spdel" data-sp="${esc(s.id)}">✕</button></div>`).join("")}` : ""}
       ${TA(x,"persona","Personality, ideals, bonds, flaws","What drives them…",3)}`,
       [x.species, x.cls, x.level ? `level ${x.level}` : "", x.ac ? `AC ${x.ac}` : "", x.hpMax ? `HP ${x.hpMax}` : "", spells.length ? `${spells.length} spells` : ""].filter(Boolean).join(" · "))}
@@ -613,7 +629,8 @@ view.addEventListener("click", e => {
   if (a==="del" && x) { if (!confirm(`Delete ${x.name||"this"} from the Field Book?${x.fbSent ? " (What you already sent to the survey stays there.)" : ""}`)) return;
     db[ui.tab] = db[ui.tab].filter(y=>y!==x); ui.open = null; save(true); render(); return; }
   if (a==="atkadd" && x) { (x.attacks = x.attacks||[]).push({ name:"", hit:"", dmg:"", dtype:"" }); touch(x); render(); return; }
-  if (a==="spadd" && x) { const i = view.querySelector("[data-spname]"), s = i && Survey.spellByName(i.value); if (!s) { toast("Pick a spell from the list."); return; }
+  if (a==="spadd" && x) { const i = view.querySelector("[data-spname]"), nm = String((i && i.value) || "").trim(); let s = nm && Survey.spellByName(nm); if (!nm) { toast("Type a spell's name."); return; }
+    if (!s) { s = Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:nm, lv:0, notes:"Added by name from a person: fill it in here." }); s.fbMade = s.fbEdited = Date.now(); db.spells.unshift(s); save(true); toast(`"${nm}" added as your own spell: fill it in on the Spells tab.`); }     // a new name: your own spell (2026-10-30)
     x.spells = x.spells||[]; if (!x.spells.includes(s.id)) x.spells.push(s.id); touch(x); render(); toast(`${x.name||"They"} knows ${s.name}.`); return; }
   /* start a spell of your own from an SRD one: a copy to change, not yet added */
   if (a==="copysrd") { const i = view.querySelector("[data-copyname]"), s = i && Survey.SRD_SPELLS.find(q=>q.name.toLowerCase()===String(i.value).trim().toLowerCase());
