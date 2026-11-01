@@ -14,3 +14,7 @@ Files: `index.html` (the whole app), `sw.js` (offline cache; bump `CACHE` with e
 **Sync:** the Sync button (top right) keeps the Field Book the same on every device: items, people, spells, shop kinds, factions, and the campaigns it knows, entry by entry, the newer copy winning; deletions travel too. It shares the Character Book's setup (same token, same secret gist, its own file there), so set Sync up once in the Character Book and it works here as well. Theme, the roller, and the campaign filter stay on each device.
 
 Tests: `powershell -NoProfile -ExecutionPolicy Bypass -File tests\run.ps1` (the same step-test runner as the Character Book's).
+
+## Rules tab (v30)
+
+Backgrounds and roll tables for the players: made here, synced to the Character Book (its builder lists the backgrounds; every character can roll the tables). They aren't sent to the survey, and their notes stay on this phone.

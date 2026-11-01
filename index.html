@@ -146,7 +146,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 29;
+const VERSION = 30;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -184,7 +184,7 @@ const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"")
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{}, lastCampaign:o.lastCampaign||"", campaigns:Array.isArray(o.campaigns) ? o.campaigns : [], campFilter:o.campFilter||"", deleted:o.deleted && typeof o.deleted==="object" ? o.deleted : {} }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], backgrounds:Array.isArray(o.backgrounds) ? o.backgrounds : [], tables:Array.isArray(o.tables) ? o.tables : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{}, lastCampaign:o.lastCampaign||"", campaigns:Array.isArray(o.campaigns) ? o.campaigns : [], campFilter:o.campFilter||"", deleted:o.deleted && typeof o.deleted==="object" ? o.deleted : {} }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -229,9 +229,13 @@ $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("da
 const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", kind:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
 const ROLL_KEYS = ["disp","level","role","kind","species","gender","theme","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
-const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"], factions:["faction","factions","New faction"] };
+const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"], factions:["faction","factions","New faction"], backgrounds:["background","backgrounds","New background"], tables:["table","tables","New table"] };
+/* the Rules tab (2026-11-01): backgrounds and roll tables for the players, synced to the Character Book (the survey
+   doesn't take them: Send leaves them out) */
+const curCat = () => ui.tab==="rules" ? (ui.rcat || "backgrounds") : ui.tab;
+const RULE_CATS = ["backgrounds","tables"];
 const allEntries = () => [...db.loot, ...db.npcs, ...db.spells, ...db.shops, ...db.factions];
-const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[ui.tab]||[]).find(x=>x.id===ui.open) : null;
+const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[curCat()]||[]).find(x=>x.id===ui.open) : null;
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
 const toSend = () => allEntries().filter(changed).length;
 
@@ -252,17 +256,17 @@ function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarit
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
 function factionLine(x){ const E = Survey.factionEffects(x); return [x.align ? Survey.ALIGN_ABBR[x.align] || x.align : "", `standing ${Survey.sgn(E.s)} · ${E.tier.label.toLowerCase()}`, x.hidden ? "hidden from the players" : ""].filter(Boolean).join(" · "); }
 function shopLine(x){ const k = Survey.PEOPLE_KINDS[x.keeper]; return [k ? `kept by a ${k.label.toLowerCase()}` : "", `${x.nmin||4}-${x.nmax||6} for sale`, `${String(x.srd||"").split("\n").filter(s=>s.trim()).length + String(x.goods||"").split("\n").filter(s=>s.trim()).length} it can stock`].filter(Boolean).join(" · "); }
-const lineOf = (cat, x) => cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : cat==="shops" ? shopLine(x) : cat==="factions" ? factionLine(x) : personLine(x);
+const lineOf = (cat, x) => cat==="backgrounds" ? backgroundLine(x) : cat==="tables" ? tableNote(parseTable(x.text)) : cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : cat==="shops" ? shopLine(x) : cat==="factions" ? factionLine(x) : personLine(x);
 
 function render(){
   const send = toSend();
-  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["shops","Shops",db.shops.length],["factions","Factions",db.factions.length],["send","Send",send]].map(([k,l,n]) =>
+  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["shops","Shops",db.shops.length],["factions","Factions",db.factions.length],["rules","Rules",db.backgrounds.length + db.tables.length],["send","Send",send]].map(([k,l,n]) =>
     `<button class="tab ${ui.tab===k?"on":""}" data-tab="${k}">${l}<small>${k==="send" ? (n ? `<span class="badge">${n}</span>` : "all sent") : n}</small></button>`).join("");
   $("#hdr").hidden = !!entry();
   const v = $("#view");
   if (ui.tab==="send") v.innerHTML = sendView();
-  else if (entry()) v.innerHTML = sheetView(ui.tab, entry());
-  else v.innerHTML = listView(ui.tab);
+  else if (entry()) v.innerHTML = sheetView(curCat(), entry());
+  else v.innerHTML = (ui.tab==="rules" ? `<div class="row" style="margin-bottom:10px">${RULE_CATS.map(c=>`<button class="btn ${curCat()===c?"main":""}" style="flex:1" data-act="rcat" data-v="${c}">${c==="backgrounds" ? "Backgrounds" : "Roll tables"} (${db[c].length})</button>`).join("")}</div>` : "") + listView(curCat());
 }
 
 function listView(cat){
@@ -271,10 +275,10 @@ function listView(cat){
     <button class="btn wide main" data-act="new">+ ${CAT_WORD[cat][2]}</button>
     ${cat==="spells" ? `<div class="with" style="margin:-2px 0 12px"><input type="text" data-copyname list="dl-srdspells" placeholder="…or start from an SRD spell"><button class="btn" data-act="copysrd">Copy</button></div><datalist id="dl-srdspells">${Survey.SRD_SPELLS.map(s=>`<option value="${esc(s.name)}">`).join("")}</datalist>` : ""}
     ${campaignsKnown().length ? `<select class="search" data-campf aria-label="Which campaign">${[["","All campaigns"], ...campaignsKnown().map(c=>[c, c]), ["(none)","No campaign set"]].map(([v, l])=>`<option value="${esc(v)}" ${db.campFilter===v?"selected":""}>${esc(l)}</option>`).join("")}</select>` : ""}
-    ${list.length ? list.map(x => `<button class="card" data-open="${esc(x.id)}">${changed(x) ? `<span class="dot" title="Not sent yet"></span>` : ""}<span class="nm">${esc(x.name||"Unnamed")}</span>
+    ${list.length ? list.map(x => `<button class="card" data-open="${esc(x.id)}">${changed(x) && !RULE_CATS.includes(cat) ? `<span class="dot" title="Not sent yet"></span>` : ""}<span class="nm">${esc(x.name||"Unnamed")}</span>
       ${(()=>{ const s = [lineOf(cat, x), !db.campFilter && x.campaign ? x.campaign : ""].filter(Boolean).join(" · "); return s ? `<span class="sub">${esc(s)}</span>` : ""; })()}</button>`).join("")
-      : `<p class="empty">${q ? "Nothing matches." : `No ${CAT_WORD[cat][1]} yet. Make one, and send it to the survey from the Send tab.`}</p>`}
-    ${list.length ? `<p class="note">A red dot: made or changed since you last sent.</p>` : ""}`;
+      : `<p class="empty">${q ? "Nothing matches." : RULE_CATS.includes(cat) ? `No ${CAT_WORD[cat][1]} yet. Make one: Sync takes it to the Character Book, where players can use it.` : `No ${CAT_WORD[cat][1]} yet. Make one, and send it to the survey from the Send tab.`}</p>`}
+    ${list.length && !RULE_CATS.includes(cat) ? `<p class="note">A red dot: made or changed since you last sent.</p>` : ""}`;
 }
 
 /* ── one entry's page ── */
@@ -295,7 +299,7 @@ function sheetView(cat, x){
   const draft = !!ui.draft, word = CAT_WORD[cat];
   const top = `<div class="sheet-top"><button class="btn small" data-act="back">‹ ${draft ? "Cancel" : word[1].charAt(0).toUpperCase()+word[1].slice(1)}</button>
     <div class="ttl"><b id="ttl">${esc(x.name || word[2])}</b>${draft ? `<small>not added yet</small>` : ""}</div></div>`;
-  const body = cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : cat==="factions" ? factionForm(x) : personForm(x);
+  const body = cat==="backgrounds" ? backgroundForm(x) : cat==="tables" ? tableForm(x) : cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : cat==="factions" ? factionForm(x) : personForm(x);
   const card = ["loot","spells","npcs","factions"].includes(cat) ? `<button class="btn wide" data-act="card">${draft ? "See its card" : "Card for the players"}</button>` : "";
   const foot = draft
     ? `<div class="foot">${card}<button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
@@ -303,6 +307,54 @@ function sheetView(cat, x){
   return top + (draft ? `<div class="draft-mark">${campBox(x) + body}</div>` : campBox(x) + body) + foot;
 }
 
+/* a background for the players (2026-11-01): the Character Book's builder offers it, and can give it to a character
+   already made. Skills and ability scores are the Character Book's own keys. */
+const FB_SKILLS = [["acrobatics","Acrobatics"],["animal","Animal Handling"],["arcana","Arcana"],["athletics","Athletics"],["deception","Deception"],["history","History"],["insight","Insight"],["intimidation","Intimidation"],["investigation","Investigation"],["medicine","Medicine"],["nature","Nature"],["perception","Perception"],["performance","Performance"],["persuasion","Persuasion"],["religion","Religion"],["sleight","Sleight of Hand"],["stealth","Stealth"],["survival","Survival"]];
+const FB_ABS = [["str","Strength"],["dex","Dexterity"],["con","Constitution"],["int","Intelligence"],["wis","Wisdom"],["cha","Charisma"]];
+const andList = a => (a = a.filter(Boolean)).length < 3 ? a.join(" and ") : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
+function backgroundLine(x){ return [andList((x.skills||[]).map(k => (FB_SKILLS.find(s=>s[0]===k)||[,k])[1])), x.featureName || x.feat || ""].filter(Boolean).join(" · "); }
+const MULTI = (x, k, opts) => `<div class="row" style="flex-wrap:wrap;gap:0 12px;margin-bottom:8px">${opts.map(([v, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-multi="${k}" data-v="${v}" ${(x[k]||[]).includes(v)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`;
+function backgroundForm(x){
+  return `${T(x,"name","Name","Sailor")}${TA(x,"desc","What it is","Years at sea, and what they taught you",2)}
+    <div class="lab">Skill proficiencies</div>${MULTI(x,"skills",FB_SKILLS)}
+    <div class="row">${T(x,"tool","Tool proficiency","Navigator's tools")}${T(x,"languages","Languages","One of your choice")}</div>
+    <div class="lab">Ability scores it raises (2024 style: tick three; none for 2014 style, where the race gives them)</div>${MULTI(x,"abilities",FB_ABS)}
+    ${T(x,"feat","Origin feat (2024 style)","Tough")}
+    ${T(x,"featureName","Feature (2014 style)","Ship's Passage")}${TA(x,"featureText","What the feature does","",3)}
+    ${TA(x,"eqA","Equipment","A belaying pin, 50 feet of silk rope, a lucky charm, and 10 GP",2)}${T(x,"eqB","Or instead (B), if it offers a choice","50 GP")}
+    ${TA(x,"notes","Notes (yours only: they don't go to the Character Book)","",2)}
+    <p class="note">Sync takes it to the Character Book: its builder lists it as a background, and Apply a background gives it to a character already made.</p>`;
+}
+/* a roll table (2026-11-01): one row per line, like "01–02 | what happens"; the Character Book rolls it. The same
+   reading as the Character Book's parseTable (keep the two alike). */
+function parseTable(text){
+  const rows = [], skipped = [], n = v => v === "00" ? 100 : +v;
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const l = raw.trim(); if (!l) continue;
+    const m = /^(\d{1,3})(?:\s*[–—-]\s*(\d{1,3}))?(?:\s*[|:.)\t]\s*|\s+)(.+)$/.exec(l);
+    if (m) { const a = n(m[1]), b = m[2] ? n(m[2]) : a; rows.push({ lo: Math.min(a, b), hi: Math.max(a, b), text: m[3].trim() }); }
+    else if (rows.length) rows[rows.length - 1].text += " " + l;
+    else skipped.push(l);
+  }
+  const die = rows.reduce((a, r) => Math.max(a, r.hi), 0), hit = new Array(die + 1).fill(0);
+  for (const r of rows) for (let k = r.lo; k <= r.hi; k++) hit[k]++;
+  return { rows, die, gaps: spans([...Array(die).keys()].map(k => k + 1).filter(k => !hit[k])), twice: spans([...Array(die).keys()].map(k => k + 1).filter(k => hit[k] > 1)), skipped };
+}
+function spans(ns){ const out = []; for (const k of ns) { const l = out[out.length - 1]; if (l && l[1] === k - 1) l[1] = k; else out.push([k, k]); } return out.map(([a, b]) => a === b ? `${a}` : `${a}–${b}`); }
+function tableNote(p){
+  if (!p.rows.length) return "No rows yet: one per line, like “01–02 | what happens”.";
+  return [`d${p.die}, ${p.rows.length} row${p.rows.length === 1 ? "" : "s"}`, p.gaps.length && `nothing for ${andList(p.gaps)}`, p.twice.length && `more than one row for ${andList(p.twice)}`,
+    p.skipped.length && `skipped ${p.skipped.length === 1 ? "a line" : `${p.skipped.length} lines`} before the first row`].filter(Boolean).join("; ") + ".";
+}
+function tableForm(x){
+  return `${T(x,"name","Name","Wild Magic Surge")}
+    <label class="fld"><span>The table: one row per line</span><textarea data-f="text" rows="14" placeholder="01–02 | What happens on a 1 or a 2&#10;03–04 | …&#10;99–00 | What happens on a 99 or 100">${esc(x.text||"")}</textarea></label>
+    <p class="note" id="tblSum">${esc(tableNote(parseTable(x.text)))}</p>
+    <p class="note">The die is the highest number (00 is 100). A line that doesn't start with a number joins the row above, so a table copied from a page comes in whole.</p>
+    <button class="btn wide" data-act="tblroll">Roll it once</button><div id="tblTry"></div>
+    ${TA(x,"notes","Notes (yours only: they don't go to the Character Book)","",2)}
+    <p class="note">Sync takes it to the Character Book, where every character can roll it from the Play tab.</p>`;
+}
 function itemForm(x){
   const guess = rarityGuess(x.rarity, x.kind==="potion");
   return `${T(x,"name","Name","A lantern that burns without oil")}
@@ -490,7 +542,7 @@ let lastText = "";
    are here too, and the Field Book keeps its own file in that gist. Entry by entry, the newer copy wins (fbEdited);
    a deletion leaves a mark (db.deleted) that travels; the campaigns it knows are joined. Theme, the roller and the
    campaign filter stay on each device. Sending to the survey is unchanged. ══ */
-const SYNC_KEY = "character-book:sync", FB_FILE = "field-book-sync.json", SYNC_DESC = "Character Book sync", SYNC_CATS = ["loot","npcs","spells","shops","factions"];
+const SYNC_KEY = "character-book:sync", FB_FILE = "field-book-sync.json", SYNC_DESC = "Character Book sync", SYNC_CATS = ["loot","npcs","spells","shops","factions","backgrounds","tables"];
 const syncCfg = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); } catch (e) { return null; } };
 const setSyncCfg = v => { try { if (v) localStorage.setItem(SYNC_KEY, JSON.stringify(v)); else localStorage.removeItem(SYNC_KEY); } catch (e) {} };
 const stampOf = x => (x && (x.fbEdited || x.fbMade)) || 0;
@@ -618,7 +670,8 @@ view.addEventListener("input", e => {
   const k = t.dataset.f; if (!k || t.type==="checkbox" || t.tagName==="SELECT") return;
   setField(x, k, t.value); touch(x);
   const md = view.querySelector(`[data-mod="${k}"]`); if (md) { const v = parseInt(t.value); md.textContent = isFinite(v) ? Survey.abMod(v) : ""; }
-  if (k==="name") { const b = $("#ttl"); if (b) b.textContent = t.value || CAT_WORD[ui.tab][2]; const a = $("#addBtn"); if (a) a.textContent = `Add${t.value.trim() ? " " + t.value.trim() : ""} to the Field Book`; }
+  if (k==="text" && curCat()==="tables") { const s = $("#tblSum"); if (s) s.textContent = tableNote(parseTable(t.value)); }
+  if (k==="name") { const b = $("#ttl"); if (b) b.textContent = t.value || CAT_WORD[curCat()][2]; const a = $("#addBtn"); if (a) a.textContent = `Add${t.value.trim() ? " " + t.value.trim() : ""} to the Field Book`; }
 });
 view.addEventListener("change", e => {
   const t = e.target;
@@ -629,6 +682,8 @@ view.addEventListener("change", e => {
   /* a spell's components, ticked: rebuilt into the usual "V, S, M (…)" */
   if (t.dataset.comp != null) { const on = k => !!(view.querySelector(`[data-comp="${k}"]`)||{}).checked, mat = view.querySelector("[data-compmat]");
     x.comp = Survey.compText({ v:on("v"), s:on("s"), m:on("m"), mat: mat ? mat.value.trim() : Survey.compParts(x.comp).mat }); touch(x); render(); return; }
+  /* ticked choices kept as a list: a background's skills and ability scores */
+  if (t.dataset.multi != null) { const k = t.dataset.multi, s = new Set(x[k]||[]); if (t.checked) s.add(t.dataset.v); else s.delete(t.dataset.v); if (s.size) x[k] = [...s]; else delete x[k]; touch(x); return; }
   if (t.dataset.soldat != null) { const s = new Set(x.soldAt||[]); if (t.checked) s.add(t.dataset.soldat); else s.delete(t.dataset.soldat); if (s.size) x.soldAt = [...s]; else delete x.soldAt; touch(x); render(); return; }
   if (t.dataset.shopfrom != null) { const S = Survey.SHOP_TEMPLATES[t.value]; if (!S) return;
     Object.assign(x, { keeper:S.keeper, staff:(S.staff||[])[0]||"", staff2:(S.staff||[])[1]||"", nmin:String(S.n[0]), nmax:String(S.n[1]), srd:S.srd.join("\n"), goods:S.goods.map(g=>g.join(" | ")).join("\n") });
@@ -675,7 +730,9 @@ view.addEventListener("click", e => {
     fetch("https://api.github.com/gists?per_page=1", { headers:{ Accept:"application/vnd.github+json", Authorization:`Bearer ${tk}` } })
       .then(r => { if (!r.ok) throw new Error(r.status); setSyncCfg({ token:tk }); render(); doSync(); })
       .catch(() => toast("GitHub didn't take that token: check Gists is set to Read and write.")); return; }
-  if (a==="new") { const cat = ui.tab; ui.draft = { cat, x: cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : cat==="factions" ? { id:uid("lfa"), name:"", align:"", standing:0 } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
+  if (a==="rcat") { ui.rcat = b.dataset.v; ui.q = ""; render(); return; }
+  if (a==="tblroll" && x) { const p = parseTable(x.text); if (!p.rows.length) { toast("No rows yet."); return; } const k = 1 + Math.floor(Math.random() * p.die), r = p.rows.find(q => k >= q.lo && k <= q.hi); const o = $("#tblTry"); if (o) o.innerHTML = `<p class="note"><b>d${p.die}: ${k}.</b> ${esc(r ? r.text : "No row for that number.")}</p>`; return; }
+  if (a==="new") { const cat = curCat(); ui.draft = { cat, x: cat==="backgrounds" ? { id:uid("lbg"), name:"" } : cat==="tables" ? { id:uid("ltb"), name:"", text:"" } : cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : cat==="factions" ? { id:uid("lfa"), name:"", align:"", standing:0 } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
     const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
   if (a==="back") { ui.draft = null; ui.open = null; save(true); render(); return; }
   if (a==="card" && x) { showCard(ui.draft ? ui.draft.cat : ui.tab, x); return; }
@@ -686,7 +743,7 @@ view.addEventListener("click", e => {
   }
   if (a==="del" && x) { if (!confirm(`Delete ${x.name||"this"} from the Field Book?${x.fbSent ? " (What you already sent to the survey stays there.)" : ""}`)) return;
     db.deleted[x.id] = Math.max(Date.now(), (x.fbEdited || 0) + 1);      // Sync carries a deletion to the other devices
-    db[ui.tab] = db[ui.tab].filter(y=>y!==x); ui.open = null; save(true); render(); return; }
+    db[curCat()] = db[curCat()].filter(y=>y!==x); ui.open = null; save(true); render(); return; }
   if (a==="atkadd" && x) { (x.attacks = x.attacks||[]).push({ name:"", hit:"", dmg:"", dtype:"" }); touch(x); render(); return; }
   if (a==="spadd" && x) { const i = view.querySelector("[data-spname]"), nm = String((i && i.value) || "").trim(); let s = nm && Survey.spellByName(nm); if (!nm) { toast("Type a spell's name."); return; }
     if (!s) { s = Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:nm, lv:0, notes:"Added by name from a person: fill it in here." }); s.fbMade = s.fbEdited = Date.now(); db.spells.unshift(s); save(true); toast(`"${nm}" added as your own spell: fill it in on the Spells tab.`); }     // a new name: your own spell (2026-10-30)
@@ -703,8 +760,8 @@ view.addEventListener("click", e => {
   if (a==="copy") return void copyText();
   if (a==="import") { $("#fileIn").click(); return; }
   if (a==="wipe") { if (!confirm(`Delete every item and person on this phone? Anything not sent is gone for good.${syncCfg() ? " With Sync on, they're deleted on your other devices too, the next time each one syncs." : ""}`) || !confirm("Really delete everything?")) return;
-    const now = Date.now(); for (const y of allEntries()) db.deleted[y.id] = Math.max(now, (y.fbEdited || 0) + 1);
-    db.loot = []; db.npcs = []; db.spells = []; db.shops = []; db.factions = []; save(true); render(); toast("Emptied."); return; }
+    const now = Date.now(); for (const y of [...allEntries(), ...db.backgrounds, ...db.tables]) db.deleted[y.id] = Math.max(now, (y.fbEdited || 0) + 1);
+    db.loot = []; db.npcs = []; db.spells = []; db.shops = []; db.factions = []; db.backgrounds = []; db.tables = []; save(true); render(); toast("Emptied."); return; }
 });
 $("#fileIn").onchange = e => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => bringIn(String(r.result||"")); r.readAsText(f); e.target.value = ""; };
 $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return;
