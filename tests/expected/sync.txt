@@ -1,0 +1,3 @@
+1. an item, set up, and the first Sync sends it: cloud: Silver bell
+2. the other device renamed the bell and wrote a person: Sync brings both: here: Cracked silver bell; Old Marta; campaigns Kalatecha
+3. this device deletes the bell: Sync carries it: cloud items: 0; deleted: ll_test
