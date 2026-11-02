@@ -7,9 +7,12 @@ const tick = s => { const e = q(s); expect(e, "there's a " + s); e.checked = tru
 step("a background on the Rules tab", () => {
   click('[data-tab="rules"]'); click('[data-act="new"]');
   typ('[data-f="name"]', "Dockhand"); tick('[data-multi="skills"][data-v="athletics"]'); tick('[data-multi="skills"][data-v="insight"]');
-  typ('[data-f="featureName"]', "Harbor Friends"); click('[data-act="add"]');
+  // the feature from the dropdown shows what it does; the feat too
+  const pick = (k, v) => { const e = q(`[data-bgsel="${k}"]`); expect(e, "a " + k + " dropdown"); e.value = v; e.dispatchEvent(new Event("change", { bubbles: true })); };
+  pick("feature", "Shelter of the Faithful"); const said = q("#view .panel .note").textContent.slice(0, 70);
+  pick("feat", "Skilled"); click('[data-act="add"]');
   const x = db.backgrounds[0]; expect(x && x.name === "Dockhand", "kept");
-  return `${x.name}: ${JSON.stringify(x.skills)}; list says ${q("#view").textContent.replace(/\s+/g, " ").match(/Dockhand[^R]*/)[0].trim()}`;
+  return `feature says: ${said} | ${x.name}: ${JSON.stringify(x.skills)}, ${x.feat}, ${x.featureName}; list says ${q("#view").textContent.replace(/\s+/g, " ").match(/Dockhand[^R]*/)[0].trim()}`;
 });
 step("a roll table: what it reads, and a roll", () => {
   click('[data-act="rcat"][data-v="tables"]'); click('[data-act="new"]');

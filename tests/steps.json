@@ -2,6 +2,6 @@
   "kind": "local",
   "keys": ["fieldbook", "character-book:sync"],
   "app": "../index.html",
-  "inline": { "survey.js": "../survey.js" },
+  "inline": { "survey.js": "../survey.js", "feats.js": "../feats.js" },
   "cases": ["cases"]
 }

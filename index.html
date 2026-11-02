@@ -142,11 +142,12 @@
 <script>/* what survey.js asks the phone for: its library, and the level to roll at */
 window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:db.spells, tables:[] }), level: () => ui.level || 3 };</script>
 <script src="survey.js"></script>
+<script src="feats.js"></script>
 <script>
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 30;
+const VERSION = 31;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -314,13 +315,27 @@ const FB_ABS = [["str","Strength"],["dex","Dexterity"],["con","Constitution"],["
 const andList = a => (a = a.filter(Boolean)).length < 3 ? a.join(" and ") : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
 function backgroundLine(x){ return [andList((x.skills||[]).map(k => (FB_SKILLS.find(s=>s[0]===k)||[,k])[1])), x.featureName || x.feat || ""].filter(Boolean).join(" · "); }
 const MULTI = (x, k, opts) => `<div class="row" style="flex-wrap:wrap;gap:0 12px;margin-bottom:8px">${opts.map(([v, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-multi="${k}" data-v="${v}" ${(x[k]||[]).includes(v)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`;
+/* the feat and the feature as dropdowns (2026-11-01): what the SRD has (feats.js, made with the Character Book's rules),
+   and for a feature your other backgrounds' too; picking one shows what it does; Other to write your own */
+const PICKS = typeof RULE_PICKS !== "undefined" ? RULE_PICKS : { feats:[], features:[], credits:{} };
+function fbFeatureOpts(x){ const out = PICKS.features.map(o => ({ ...o })); for (const b of db.backgrounds) if (b.id!==x.id && b.featureName && !out.some(o=>o.name===b.featureName)) out.push({ name:b.featureName, desc:b.featureText||"", from:`${b.name||"another background"} (yours)` }); return out; }
+function fbPick(x, k){
+  const feat = k==="feat", opts = feat ? PICKS.feats : fbFeatureOpts(x), name = feat ? x.feat : x.featureName, mine = feat ? x.featOther : x.featureOther;
+  const known = name ? opts.find(o=>o.name===name) : null, cur = known ? name : (mine || name) ? "__other" : "";
+  const opt = o => `<option value="${esc(o.name)}" ${cur===o.name?"selected":""}>${esc(o.name)}</option>`;
+  const list = feat ? [["Origin feats", opts.filter(o=>o.type==="Origin")], ["Other feats", opts.filter(o=>o.type!=="Origin")]].map(([g, os]) => os.length ? `<optgroup label="${g}">${os.map(opt).join("")}</optgroup>` : "").join("") : opts.map(opt).join("");
+  let h = `<label class="fld"><span>${feat ? "Origin feat (2024 style)" : "Feature (2014 style)"}</span><select data-bgsel="${k}"><option value="">None</option>${list}<option value="__other" ${cur==="__other"?"selected":""}>Other (write your own)</option></select></label>`;
+  if (known) h += `<div class="panel" style="margin-top:-4px"><p class="note" style="white-space:pre-line;margin:0">${esc(known.desc)}</p><p class="note" style="margin:6px 0 0"><b>${esc(known.from || known.srd)}</b></p>${known.srd && PICKS.credits[known.srd] ? `<p class="note" style="font-size:11.5px;margin:4px 0 0">${esc(PICKS.credits[known.srd])}</p>` : ""}</div>`;
+  else if (cur==="__other") h += feat ? `${T(x,"feat","Its name","Tough")}${TA(x,"featText","What it does","",3)}` : `${T(x,"featureName","Its name","Ship's Passage")}${TA(x,"featureText","What it does","",3)}`;
+  if (!known) h += `<p class="note">${feat ? `The SRD has ${andList(PICKS.feats.filter(o=>o.type==="Origin").map(o=>o.name))} as origin feats. For another, choose Other and copy it from the 2024 Player's Handbook.` : "The SRD 5.1 has only the Acolyte's feature (Shelter of the Faithful). For another, choose Other and copy it from the 2014 Player's Handbook; it's offered for your other backgrounds after that."}</p>`;
+  return h;
+}
 function backgroundForm(x){
   return `${T(x,"name","Name","Sailor")}${TA(x,"desc","What it is","Years at sea, and what they taught you",2)}
     <div class="lab">Skill proficiencies</div>${MULTI(x,"skills",FB_SKILLS)}
     <div class="row">${T(x,"tool","Tool proficiency","Navigator's tools")}${T(x,"languages","Languages","One of your choice")}</div>
     <div class="lab">Ability scores it raises (2024 style: tick three; none for 2014 style, where the race gives them)</div>${MULTI(x,"abilities",FB_ABS)}
-    ${T(x,"feat","Origin feat (2024 style)","Tough")}
-    ${T(x,"featureName","Feature (2014 style)","Ship's Passage")}${TA(x,"featureText","What the feature does","",3)}
+    ${fbPick(x,"feat")}${fbPick(x,"feature")}
     ${TA(x,"eqA","Equipment","A belaying pin, 50 feet of silk rope, a lucky charm, and 10 GP",2)}${T(x,"eqB","Or instead (B), if it offers a choice","50 GP")}
     ${TA(x,"notes","Notes (yours only: they don't go to the Character Book)","",2)}
     <p class="note">Sync takes it to the Character Book: its builder lists it as a background, and Apply a background gives it to a character already made.</p>`;
@@ -683,6 +698,11 @@ view.addEventListener("change", e => {
   if (t.dataset.comp != null) { const on = k => !!(view.querySelector(`[data-comp="${k}"]`)||{}).checked, mat = view.querySelector("[data-compmat]");
     x.comp = Survey.compText({ v:on("v"), s:on("s"), m:on("m"), mat: mat ? mat.value.trim() : Survey.compParts(x.comp).mat }); touch(x); render(); return; }
   /* ticked choices kept as a list: a background's skills and ability scores */
+  if (t.dataset.bgsel != null) { const k = t.dataset.bgsel, v = t.value;
+    if (k==="feat") { if (v==="__other") { x.featOther = true; if (PICKS.feats.some(o=>o.name===x.feat)) delete x.feat; } else { if (v) x.feat = v; else delete x.feat; delete x.featOther; delete x.featText; } }
+    else if (v==="__other") { x.featureOther = true; if (fbFeatureOpts(x).some(o=>o.name===x.featureName)) { delete x.featureName; delete x.featureText; } }
+    else { const o = fbFeatureOpts(x).find(q=>q.name===v); if (v) { x.featureName = v; x.featureText = o ? o.desc : ""; } else { delete x.featureName; delete x.featureText; } delete x.featureOther; }
+    touch(x); render(); return; }
   if (t.dataset.multi != null) { const k = t.dataset.multi, s = new Set(x[k]||[]); if (t.checked) s.add(t.dataset.v); else s.delete(t.dataset.v); if (s.size) x[k] = [...s]; else delete x[k]; touch(x); return; }
   if (t.dataset.soldat != null) { const s = new Set(x.soldAt||[]); if (t.checked) s.add(t.dataset.soldat); else s.delete(t.dataset.soldat); if (s.size) x.soldAt = [...s]; else delete x.soldAt; touch(x); render(); return; }
   if (t.dataset.shopfrom != null) { const S = Survey.SHOP_TEMPLATES[t.value]; if (!S) return;
