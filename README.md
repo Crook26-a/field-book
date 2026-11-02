@@ -17,4 +17,4 @@ Tests: `powershell -NoProfile -ExecutionPolicy Bypass -File tests\run.ps1` (the 
 
 ## Rules tab (v30)
 
-Backgrounds and roll tables for the players: made here, synced to the Character Book (its builder lists the backgrounds; every character can roll the tables). They aren't sent to the survey, and their notes stay on this phone.
+Backgrounds, roll tables, classes, subclasses, and feats for the players (classes, subclasses, and feats since v32, with their features by level and their changes to a character's sheet, the Character Book's way): made here, synced to the Character Book (its builder and level-up offer them; every character can roll the tables). Feats and backgrounds have cards for the players too, drawn as item cards are; a long one goes onto numbered cards rather than shrinking past reading. They aren't sent to the survey, and their notes stay on this phone.

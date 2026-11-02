@@ -147,7 +147,7 @@ window.FB_SURVEY = { lib: () => ({ foes:[], npcs:db.npcs, loot:db.loot, spells:d
 "use strict";
 /* ══ Field Book — write up items and people for Ordinate Survey away from the computer, then send them over.
    Everything stays on this phone (localStorage) until you send it: a .json file the survey's Library brings in. ══ */
-const VERSION = 31;
+const VERSION = 32;
 const STORE = "fieldbook";
 
 /* ── the same lists the survey uses, so what you make here fits straight in. Rules wording from the 2024 rules
@@ -185,7 +185,7 @@ const rarityGuess = (rarity, potion) => { const g = RARITY_GP[String(rarity||"")
 
 /* ── storage: one record on this phone. Send often: a phone can clear a web app's storage. ── */
 function norm(o){ o = o && typeof o==="object" ? o : {};
-  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], backgrounds:Array.isArray(o.backgrounds) ? o.backgrounds : [], tables:Array.isArray(o.tables) ? o.tables : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{}, lastCampaign:o.lastCampaign||"", campaigns:Array.isArray(o.campaigns) ? o.campaigns : [], campFilter:o.campFilter||"", deleted:o.deleted && typeof o.deleted==="object" ? o.deleted : {} }; }
+  return { loot:Array.isArray(o.loot) ? o.loot : [], npcs:Array.isArray(o.npcs) ? o.npcs : [], spells:Array.isArray(o.spells) ? o.spells : [], shops:Array.isArray(o.shops) ? o.shops : [], factions:Array.isArray(o.factions) ? o.factions : [], backgrounds:Array.isArray(o.backgrounds) ? o.backgrounds : [], tables:Array.isArray(o.tables) ? o.tables : [], classes:Array.isArray(o.classes) ? o.classes : [], subclasses:Array.isArray(o.subclasses) ? o.subclasses : [], feats:Array.isArray(o.feats) ? o.feats : [], lastSent:o.lastSent||0, theme:o.theme||"", roll:o.roll||{}, lastCampaign:o.lastCampaign||"", campaigns:Array.isArray(o.campaigns) ? o.campaigns : [], campFilter:o.campFilter||"", deleted:o.deleted && typeof o.deleted==="object" ? o.deleted : {} }; }
 let db = (() => { try { const t = localStorage.getItem(STORE); if (t) return norm(JSON.parse(t)); } catch (e) {} return norm(null); })();
 let saveTimer = null;
 function save(now){
@@ -201,11 +201,12 @@ let toastTimer = null;
 /* a card for the players (2026-10-28): the survey's own card, drawn here, shared to a player's phone or saved */
 let cardNow = null;
 async function showCard(cat, x){
-  const blob = await Survey.cardBlob(cat, x); if (!blob) { toast("No card for this."); return; }
-  if (cardNow) URL.revokeObjectURL(cardNow.url);
-  cardNow = { blob, url:URL.createObjectURL(blob), name:Survey.cardFileName(x) };
-  $("#cardov .cardbox").innerHTML = `<img src="${cardNow.url}" alt="${esc(x.name||"")}">
-    <div class="row"><button class="btn main" style="flex:2" data-card="share">Share the picture</button><button class="btn" style="flex:1" data-card="close">Close</button></div>
+  const items = ["feats","backgrounds"].includes(cat) ? ruleCards(cat, x) : [[cat, x]];
+  const blobs = (await Promise.all(items.map(([k, y]) => Survey.cardBlob(k, y)))).filter(Boolean); if (!blobs.length) { toast("No card for this."); return; }
+  if (cardNow) cardNow.forEach(c => URL.revokeObjectURL(c.url));
+  cardNow = blobs.map((blob, i) => ({ blob, url:URL.createObjectURL(blob), name:Survey.cardFileName(items[i][1]) }));
+  $("#cardov .cardbox").innerHTML = `${cardNow.map(c => `<img src="${c.url}" alt="${esc(x.name||"")}" style="margin-bottom:8px">`).join("")}
+    <div class="row"><button class="btn main" style="flex:2" data-card="share">Share the ${cardNow.length > 1 ? `${cardNow.length} pictures` : "picture"}</button><button class="btn" style="flex:1" data-card="close">Close</button></div>
     <p class="note" style="color:#f5ecd6;text-align:center;margin:0">Only what the players may see. Text it, AirDrop it, or hold up the phone.</p>`;
   $("#cardov").hidden = false;
 }
@@ -214,11 +215,11 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-card]");
   if (e.target===ov || (b && b.dataset.card==="close")) { ov.hidden = true; return; }
   if (!b || b.dataset.card!=="share" || !cardNow) return;
-  const f = new File([cardNow.blob], cardNow.name, { type:"image/png" });
-  if (navigator.canShare && navigator.canShare({ files:[f] })) { try { await navigator.share({ files:[f], title:cardNow.name }); return; } catch (err) { if (err && err.name==="AbortError") return; } }
-  const a = document.createElement("a"); a.href = cardNow.url; a.download = cardNow.name; document.body.appendChild(a); a.click(); a.remove(); toast(`Saved ${cardNow.name}.`);
-});
-function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 3200); }
+  const files = cardNow.map(c => new File([c.blob], c.name, { type:"image/png" }));
+  if (navigator.canShare && navigator.canShare({ files })) { try { await navigator.share({ files, title:cardNow[0].name }); return; } catch (err) { if (err && err.name==="AbortError") return; } }
+  for (const c of cardNow) { const a = document.createElement("a"); a.href = c.url; a.download = c.name; document.body.appendChild(a); a.click(); a.remove(); }
+  toast(`Saved ${cardNow.length > 1 ? `${cardNow.length} cards` : cardNow[0].name}.`);
+});function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 3200); }
 
 /* ── light or dark: follows the phone until you pick ── */
 function applyTheme(){ const dark = db.theme ? db.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -230,11 +231,12 @@ $("#themeBtn").onclick = () => { db.theme = document.body.classList.contains("da
 const ui = { tab:"loot", open:null, draft:null, q:"", disp:"", level:3, role:"", kind:"", species:"", align:"", type:"Humanoid", foe:"" };     // open: an entry's id; draft: { cat, x } not added yet
 const ROLL_KEYS = ["disp","level","role","kind","species","gender","theme","align","type","foe"];
 Object.assign(ui, db.roll || {});                     // the roller's settings, as you last left them
-const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"], factions:["faction","factions","New faction"], backgrounds:["background","backgrounds","New background"], tables:["table","tables","New table"] };
+const CAT_WORD = { loot:["item","items","New item"], npcs:["person","people","New person"], spells:["spell","spells","New spell"], shops:["shop kind","shop kinds","New shop kind"], factions:["faction","factions","New faction"], backgrounds:["background","backgrounds","New background"], tables:["table","tables","New table"], classes:["class","classes","New class"], subclasses:["subclass","subclasses","New subclass"], feats:["feat","feats","New feat"] };
 /* the Rules tab (2026-11-01): backgrounds and roll tables for the players, synced to the Character Book (the survey
    doesn't take them: Send leaves them out) */
 const curCat = () => ui.tab==="rules" ? (ui.rcat || "backgrounds") : ui.tab;
-const RULE_CATS = ["backgrounds","tables"];
+const RULE_CATS = ["backgrounds","tables","classes","subclasses","feats"];
+const RULE_LABEL = { backgrounds:"Backgrounds", tables:"Roll tables", classes:"Classes", subclasses:"Subclasses", feats:"Feats" };
 const allEntries = () => [...db.loot, ...db.npcs, ...db.spells, ...db.shops, ...db.factions];
 const entry = () => ui.draft ? ui.draft.x : ui.open ? (db[curCat()]||[]).find(x=>x.id===ui.open) : null;
 const changed = x => (x.fbEdited||0) > (x.fbSent||0);
@@ -257,17 +259,17 @@ function itemLine(x){ return [x.kind, x.rarity && x.rarity!=="Mundane" ? x.rarit
 function personLine(x){ return [x.role, x.align, x.where].filter(Boolean).join(" · "); }
 function factionLine(x){ const E = Survey.factionEffects(x); return [x.align ? Survey.ALIGN_ABBR[x.align] || x.align : "", `standing ${Survey.sgn(E.s)} · ${E.tier.label.toLowerCase()}`, x.hidden ? "hidden from the players" : ""].filter(Boolean).join(" · "); }
 function shopLine(x){ const k = Survey.PEOPLE_KINDS[x.keeper]; return [k ? `kept by a ${k.label.toLowerCase()}` : "", `${x.nmin||4}-${x.nmax||6} for sale`, `${String(x.srd||"").split("\n").filter(s=>s.trim()).length + String(x.goods||"").split("\n").filter(s=>s.trim()).length} it can stock`].filter(Boolean).join(" · "); }
-const lineOf = (cat, x) => cat==="backgrounds" ? backgroundLine(x) : cat==="tables" ? tableNote(parseTable(x.text)) : cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : cat==="shops" ? shopLine(x) : cat==="factions" ? factionLine(x) : personLine(x);
+const lineOf = (cat, x) => cat==="classes" ? classLine(x) : cat==="subclasses" ? subclassLine(x) : cat==="feats" ? featLine(x) : cat==="backgrounds" ? backgroundLine(x) : cat==="tables" ? tableNote(parseTable(x.text)) : cat==="loot" ? itemLine(x) : cat==="spells" ? Survey.spellLine(x) : cat==="shops" ? shopLine(x) : cat==="factions" ? factionLine(x) : personLine(x);
 
 function render(){
   const send = toSend();
-  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["shops","Shops",db.shops.length],["factions","Factions",db.factions.length],["rules","Rules",db.backgrounds.length + db.tables.length],["send","Send",send]].map(([k,l,n]) =>
+  $("#tabs").innerHTML = [["loot","Items",db.loot.length],["npcs","People",db.npcs.length],["spells","Spells",db.spells.length],["shops","Shops",db.shops.length],["factions","Factions",db.factions.length],["rules","Rules",RULE_CATS.reduce((a, c) => a + db[c].length, 0)],["send","Send",send]].map(([k,l,n]) =>
     `<button class="tab ${ui.tab===k?"on":""}" data-tab="${k}">${l}<small>${k==="send" ? (n ? `<span class="badge">${n}</span>` : "all sent") : n}</small></button>`).join("");
   $("#hdr").hidden = !!entry();
   const v = $("#view");
   if (ui.tab==="send") v.innerHTML = sendView();
   else if (entry()) v.innerHTML = sheetView(curCat(), entry());
-  else v.innerHTML = (ui.tab==="rules" ? `<div class="row" style="margin-bottom:10px">${RULE_CATS.map(c=>`<button class="btn ${curCat()===c?"main":""}" style="flex:1" data-act="rcat" data-v="${c}">${c==="backgrounds" ? "Backgrounds" : "Roll tables"} (${db[c].length})</button>`).join("")}</div>` : "") + listView(curCat());
+  else v.innerHTML = (ui.tab==="rules" ? `<div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">${RULE_CATS.map(c=>`<button class="btn small ${curCat()===c?"main":""}" style="flex:1 1 30%" data-act="rcat" data-v="${c}">${RULE_LABEL[c]} (${db[c].length})</button>`).join("")}</div>` : "") + listView(curCat());
 }
 
 function listView(cat){
@@ -300,8 +302,8 @@ function sheetView(cat, x){
   const draft = !!ui.draft, word = CAT_WORD[cat];
   const top = `<div class="sheet-top"><button class="btn small" data-act="back">‹ ${draft ? "Cancel" : word[1].charAt(0).toUpperCase()+word[1].slice(1)}</button>
     <div class="ttl"><b id="ttl">${esc(x.name || word[2])}</b>${draft ? `<small>not added yet</small>` : ""}</div></div>`;
-  const body = cat==="backgrounds" ? backgroundForm(x) : cat==="tables" ? tableForm(x) : cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : cat==="factions" ? factionForm(x) : personForm(x);
-  const card = ["loot","spells","npcs","factions"].includes(cat) ? `<button class="btn wide" data-act="card">${draft ? "See its card" : "Card for the players"}</button>` : "";
+  const body = cat==="classes" ? classForm(x) : cat==="subclasses" ? subclassForm(x) : cat==="feats" ? featForm(x) : cat==="backgrounds" ? backgroundForm(x) : cat==="tables" ? tableForm(x) : cat==="loot" ? itemForm(x) : cat==="spells" ? spellForm(x) : cat==="shops" ? shopForm(x) : cat==="factions" ? factionForm(x) : personForm(x);
+  const card = ["loot","spells","npcs","factions","feats","backgrounds"].includes(cat) ? `<button class="btn wide" data-act="card">${draft ? "See its card" : "Card for the players"}</button>` : "";
   const foot = draft
     ? `<div class="foot">${card}<button class="btn wide main" data-act="add" id="addBtn">Add${x.name ? " " + esc(x.name) : ""} to the Field Book</button></div>`
     : `<div class="foot">${card}<div class="row"><button class="btn" style="flex:2" data-act="back">Done</button><button class="btn danger" style="flex:1" data-act="del">Delete</button></div></div>`;
@@ -320,7 +322,7 @@ const MULTI = (x, k, opts) => `<div class="row" style="flex-wrap:wrap;gap:0 12px
 const PICKS = typeof RULE_PICKS !== "undefined" ? RULE_PICKS : { feats:[], features:[], credits:{} };
 function fbFeatureOpts(x){ const out = PICKS.features.map(o => ({ ...o })); for (const b of db.backgrounds) if (b.id!==x.id && b.featureName && !out.some(o=>o.name===b.featureName)) out.push({ name:b.featureName, desc:b.featureText||"", from:`${b.name||"another background"} (yours)` }); return out; }
 function fbPick(x, k){
-  const feat = k==="feat", opts = feat ? PICKS.feats : fbFeatureOpts(x), name = feat ? x.feat : x.featureName, mine = feat ? x.featOther : x.featureOther;
+  const feat = k==="feat", opts = feat ? [...PICKS.feats, ...db.feats.filter(q=>q.name).map(q=>({ name:q.name, type:q.type==="Origin" ? "Origin" : "Yours", desc:q.text||"", from:"Your feat" }))] : fbFeatureOpts(x), name = feat ? x.feat : x.featureName, mine = feat ? x.featOther : x.featureOther;
   const known = name ? opts.find(o=>o.name===name) : null, cur = known ? name : (mine || name) ? "__other" : "";
   const opt = o => `<option value="${esc(o.name)}" ${cur===o.name?"selected":""}>${esc(o.name)}</option>`;
   const list = feat ? [["Origin feats", opts.filter(o=>o.type==="Origin")], ["Other feats", opts.filter(o=>o.type!=="Origin")]].map(([g, os]) => os.length ? `<optgroup label="${g}">${os.map(opt).join("")}</optgroup>` : "").join("") : opts.map(opt).join("");
@@ -369,6 +371,101 @@ function tableForm(x){
     <button class="btn wide" data-act="tblroll">Roll it once</button><div id="tblTry"></div>
     ${TA(x,"notes","Notes (yours only: they don't go to the Character Book)","",2)}
     <p class="note">Sync takes it to the Character Book, where every character can roll it from the Play tab.</p>`;
+}
+/* classes, subclasses, and feats for the players (2026-11-02): the same shapes as the Character Book's own (features
+   by level, each with changes to the sheet), synced to it. A form edits nested parts by path: data-fp "features.0.name". */
+const getP = (o, p) => String(p).split(".").reduce((a, k) => a == null ? a : a[k], o);
+function setP(o, p, v){ const ks = String(p).split("."), last = ks.pop(); let a = o; ks.forEach((k, i) => { if (a[k] == null) a[k] = /^\d+$/.test(ks[i + 1] ?? last) ? [] : {}; a = a[k]; }); a[last] = v; }
+const FP = (x, p, label, ph, num, flex) => `<label class="fld" style="flex:${flex||1}"><span>${label}</span><input type="${num?"number":"text"}" ${num?'inputmode="numeric"':""} data-fp="${p}" value="${esc(getP(x, p) ?? "")}" placeholder="${esc(ph||"")}"></label>`;
+const FPA = (x, p, label, ph, rows) => `<label class="fld"><span>${label}</span><textarea data-fp="${p}" rows="${rows||3}" placeholder="${esc(ph||"")}">${esc(getP(x, p) ?? "")}</textarea></label>`;
+const FPS = (x, p, label, opts, flex) => `<label class="fld" style="flex:${flex||1}"><span>${label}</span><select data-fp="${p}">${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(getP(x, p) ?? "")===String(v)?"selected":""}>${esc(l)}</option>`; }).join("")}</select></label>`;
+const FPC = (x, p, label) => `<label class="check"><input type="checkbox" data-fp="${p}" ${getP(x, p)?"checked":""}> ${label}</label>`;
+const FPM = (x, p, opts) => `<div class="row" style="flex-wrap:wrap;gap:0 12px;margin-bottom:8px">${opts.map(([v, l])=>`<label class="check" style="margin:2px 0"><input type="checkbox" data-fpm="${p}" data-v="${v}" ${(getP(x, p)||[]).includes(v)?"checked":""}> ${esc(l)}</label>`).join("")}</div>`;
+const FB_CLASSES = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"];
+const fbClassNames = () => [...new Set([...FB_CLASSES, ...db.classes.map(k=>k.name).filter(Boolean)])];
+const FB_TARGETS = [["atk","Attack rolls"],["satk","Spell attacks"],["watk","Weapon attacks"],["dmg","Damage"],["save","Saving throws"],["check","Ability checks"],["init","Initiative"],["ac","Armor Class"],["dc","Spell save DC"],["hpmax","Hit point maximum"],["speed","Speed"]];
+const FB_FX_KINDS = [["ab","Ability score"],["skill","Skill"],["save","Saving throw"],["prof","Armor, weapon, tool, or language"],["res","A use to track"],["spells","Always-prepared spells"],["hp","Hit points per level"],["speed","Speed"],["bonus","An ongoing bonus"],["aftercast","A roll after casting (Wild Magic)"]];
+const FB_FX_NEW = { ab:{ ab:"wis", n:1, from:[] }, skill:{ k:"perception", lv:1 }, save:{ ab:"wis" }, prof:{ text:"" }, res:{ name:"", n:1, by:"", ab:"wis", rest:"long" }, spells:{ names:"" },
+  hp:{ n:1 }, speed:{ n:10 }, bonus:{ to:"ac", bonus:"1" }, aftercast:{ cls:"Sorcerer", die:20, hits:"1", table:"", restores:"" } };
+// what a feature or feat changes on a character's sheet, edited the Character Book's way (it reads these as they are)
+function fxEdit(x, p){
+  const list = getP(x, p) || [], kind = t => (FB_FX_KINDS.find(k=>k[0]===t)||[, t])[1];
+  const fields = (e, q) => {
+    switch (e.t) {
+      case "ab": return `<div class="row">${FPS(x, q+".ab", "Which", [...FB_ABS, ["choose","One they choose"]])}${FP(x, q+".n", "By", "1", true, .6)}</div>${e.ab==="choose" ? FPM(x, q+".from", FB_ABS) : ""}`;
+      case "skill": return `<div class="row">${FPS(x, q+".k", "Skill", FB_SKILLS)}${FPS(x, q+".lv", "As", [["1","Proficiency"],["2","Expertise"]])}</div>`;
+      case "save": return FPS(x, q+".ab", "Saving throw", FB_ABS);
+      case "prof": return FP(x, q+".text", "What", "Heavy armor");
+      case "res": return `<div class="row">${FP(x, q+".name", "Name", "Channel Divinity: Invoke Duplicity")}${FPS(x, q+".rest", "Back on", [["long","a long rest"],["short","a short or long rest"]])}</div>
+        <div class="row">${FPS(x, q+".by", "How many", [["","a number"],["prof","the proficiency bonus"],["mod","an ability modifier"],["clevel","the class level"]])}${e.by==="" || e.by==null ? FP(x, q+".n", "Uses", "1", true, .6) : e.by==="mod" ? FPS(x, q+".ab", "Modifier", FB_ABS) : ""}</div>`;
+      case "spells": return FP(x, q+".names", "Spells, with commas", "Charm Person, Disguise Self");
+      case "hp": return FP(x, q+".n", "Hit points each level", "1", true);
+      case "speed": return FP(x, q+".n", "Speed (feet, + or −)", "10", true);
+      case "bonus": return `<div class="row">${FPS(x, q+".to", "To", [...FB_TARGETS, ...FB_SKILLS.map(([k, n])=>["skill:"+k, n])])}${FP(x, q+".bonus", "Bonus", "1, or 1d4")}</div>`;
+      case "aftercast": return `<div class="row">${FPS(x, q+".cls", "After casting a spell of", [["","any class"], ...fbClassNames()])}${FP(x, q+".die", "Roll a d", "20", true, .6)}${FP(x, q+".hits", "On", "1, or 20")}</div>
+        <div class="row">${db.tables.length ? FPS(x, q+".table", "Roll the table", [["","—"], ...db.tables.map(t=>t.name).filter(Boolean)]) : FP(x, q+".table", "Roll the table", "Wild Magic Surge")}${FP(x, q+".restores", "And a use comes back", "Tides of Chaos")}</div>`;
+    }
+    return "";
+  };
+  return list.map((e, i) => `<div class="panel" style="padding:8px 8px 0"><div class="row" style="align-items:center;margin-bottom:6px"><b style="flex:1">${esc(kind(e.t))}</b><button class="btn small danger" data-act="fpdel" data-p="${p}" data-i="${i}">✕</button></div>${fields(e, `${p}.${i}`)}</div>`).join("")
+    + `<select data-fxadd="${p}" style="margin-bottom:10px"><option value="">+ A change to the sheet…</option>${FB_FX_KINDS.map(([k, l])=>`<option value="${k}">${l}</option>`).join("")}</select>`;
+}
+function featuresEdit(x){
+  const fs = (x.features||[]).map((q, i)=>({ q, i })).sort((a, b)=>(+a.q.level||1) - (+b.q.level||1));
+  return `<div class="lab">Features, by level</div>${fs.map(({ i })=>`<div class="panel"><div class="row">${FP(x, `features.${i}.level`, "Level", "1", true, .4)}${FP(x, `features.${i}.name`, "Feature", "")}<button class="btn small danger" data-act="fpdel" data-p="features" data-i="${i}" style="align-self:flex-end;margin-bottom:10px">✕</button></div>
+    ${FPA(x, `features.${i}.text`, "What it does", "", 3)}${fxEdit(x, `features.${i}.fx`)}</div>`).join("")}<button class="btn wide" data-act="fpadd" data-p="features" data-tpl="feature">+ A feature</button>`;
+}
+const FB_ABNAME = Object.fromEntries(FB_ABS);
+function featForm(x){
+  return `${T(x,"name","Name","Lucky Break")}<div class="row">${SEL(x,"type","Kind",["Origin","General","Fighting Style","Epic Boon"])}${T(x,"prereq","Prerequisite","Level 4+, Dexterity 13+")}</div>
+    ${TA(x,"text","What it does","",4)}<div class="lab">Changes to a character's sheet</div>${fxEdit(x, "fx")}
+    ${TA(x,"notes","Notes (yours only: they don't go to the Character Book)","",2)}
+    <p class="note">Sync takes it to the Character Book, where it's offered for a background's feat, the level-up's feat, and Versatile.</p>`;
+}
+function subclassForm(x){
+  return `${T(x,"name","Name","Trickery Domain")}${SEL(x,"of","Of the class",fbClassNames(),1,"—")}${TA(x,"desc","What it is","",2)}
+    <div class="row">${SEL(x,"caster","Spellcasting it gives",[["third","A third caster (like the Eldritch Knight)"]],1,"None (or the class's own)")}${x.caster==="third" ? SEL(x,"castAb","Ability",FB_ABS) + SEL(x,"list","Spells from the",["Wizard","Sorcerer","Warlock","Cleric","Druid","Bard"]) : ""}</div>
+    ${featuresEdit(x)}${TA(x,"notes","Notes (yours only)","",2)}
+    <p class="note">Sync takes it to the Character Book: the level-up offers it, and Apply a subclass gives it to a character already playing.</p>`;
+}
+const FB_COL_HINTS = ["Cantrips","Prepared Spells","Spells Known","Rages","Rage Damage","Ki Points","Focus Points","Sorcery Points","Channel Divinity","Sneak Attack","Martial Arts"];
+function classForm(x){
+  return `<div class="row">${T(x,"name","Name","Blood Hunter")}${SEL(x,"hd","Hit die",[["6","d6"],["8","d8"],["10","d10"],["12","d12"]],.5)}</div>
+    ${T(x,"primary","Primary ability (multiclassing needs 13 in it)","Intelligence, or Strength or Dexterity")}
+    <div class="lab">Saving throws</div>${MULTI(x,"saves",FB_ABS)}
+    <div class="row">${T(x,"skillsN","Skills to choose","2",.5,"number")}${CHK(x,"skillsAny","From any skill")}</div>${x.skillsAny ? "" : `<div class="lab">From</div>${MULTI(x,"skillsFrom",FB_SKILLS)}`}
+    <div class="row">${T(x,"armor","Armor training","Light armor, shields")}${T(x,"weapons","Weapons","Simple weapons")}</div>${T(x,"tools","Tools","")}
+    ${T(x,"eqA","Starting equipment","A rapier, a shortbow, 20 arrows, and 10 GP")}${T(x,"eqB","Or instead (B)","50 GP")}${T(x,"mcProfs","What a character taking it up second gets","Light armor")}
+    <div class="lab">Spellcasting</div><div class="row">${SEL(x,"caster","Spell slots",[["full","Full (like a wizard)"],["half","Half (like a paladin)"],["third","A third"],["pact","Pact magic"]],1,"None")}${x.caster ? SEL(x,"castAb","Ability",FB_ABS) : ""}</div>
+    ${x.caster ? `${SEL(x,"listFrom","Its spells come from",[["","Its own list only"], ...["Bard","Cleric","Druid","Paladin","Ranger","Sorcerer","Warlock","Wizard"].map(n=>[n, `The ${n} list`])])}${T(x,"ownSpells","Spells of its own (with commas)","Hex, Hunter's Mark")}` : ""}
+    <div class="row">${T(x,"subAt","Subclass at level","3",.5,"number")}${T(x,"asi","Ability score improvements at levels","4, 8, 12, 16, 19")}</div>
+    <div class="lab">Class table</div><datalist id="fbcolhints">${FB_COL_HINTS.map(n=>`<option value="${n}">`).join("")}</datalist>
+    ${(x.cols||[]).map((col, i)=>`<div class="panel"><div class="row"><label class="fld"><span>Column</span><input data-fp="cols.${i}.name" list="fbcolhints" value="${esc(col.name||"")}" placeholder="Rages"></label><button class="btn small danger" data-act="fpdel" data-p="cols" data-i="${i}" style="align-self:flex-end;margin-bottom:10px">✕</button></div>
+      <div class="row" style="align-items:center">${FPC(x, `cols.${i}.use`, "A use to track")}${col.use ? FPS(x, `cols.${i}.rest`, "Back on", [["long","a long rest"],["short","a short or long rest"]]) : ""}</div>
+      <div class="row" style="flex-wrap:wrap;gap:4px">${Array.from({ length:20 }, (_, j)=>`<label class="fld" style="flex:0 0 52px;margin:0"><span>${j+1}</span><input data-fp="cols.${i}.vals.${j}" value="${esc((col.vals||[])[j] ?? "")}"></label>`).join("")}</div></div>`).join("")}
+    <button class="btn wide" data-act="fpadd" data-p="cols" data-tpl="col">+ A column</button>
+    ${featuresEdit(x)}${TA(x,"notes","Notes (yours only)","",2)}
+    <p class="note">Sync takes it to the Character Book: its builder and level-up offer it with the SRD's classes.</p>`;
+}
+const FB_TPL = { feature: x => ({ level: Math.max(1, ...(x.features||[]).map(q=>+q.level||1)), name:"", text:"", fx:[] }), col: () => ({ name:"", vals:Array(20).fill(""), use:false, rest:"long" }) };
+const classLine = x => [x.hd ? `d${x.hd}` : "", x.primary, x.caster ? `${x.caster} caster` : "", `${(x.features||[]).length} feature${(x.features||[]).length===1?"":"s"}`].filter(Boolean).join(" · ");
+const subclassLine = x => [x.of, `${(x.features||[]).length} feature${(x.features||[]).length===1?"":"s"}`, x.caster==="third" ? "third caster" : ""].filter(Boolean).join(" · ");
+const featLine = x => [x.type, x.prereq].filter(Boolean).join(" · ");
+/* cards for a feat or a background (Joseph, 2026-11-02): drawn the survey's way, as an item card is ("Skills:" leads in
+   bold); a long one is split onto numbered cards rather than shrunk past reading */
+const orList = a => (a = a.filter(Boolean)).length < 3 ? a.join(" or ") : a.slice(0, -1).join(", ") + ", or " + a[a.length - 1];
+function ruleCards(cat, x){
+  const lines = cat==="feats" ? String(x.text||"").split(/\n+/) : [x.desc,
+    (x.skills||[]).length && `Skills: ${andList(x.skills.map(k=>(FB_SKILLS.find(s=>s[0]===k)||[,k])[1]))}`, x.tool && `Tool: ${x.tool}`, x.languages && `Languages: ${x.languages}`,
+    (x.abilities||[]).length && `Ability scores: ${orList(x.abilities.map(k=>FB_ABNAME[k]))}`, x.feat && `Origin feat: ${x.feat}`, x.featureName && `${x.featureName}: ${x.featureText||""}`,
+    x.eqA && `Equipment: ${x.eqA}${x.eqB ? `; or ${x.eqB}` : ""}`].filter(Boolean).map(String);
+  const parts = [], MAX = 1400; let cur = [];
+  const add = s => { if (cur.length && [...cur, s].join("\n").length > MAX) { parts.push(cur); cur = []; } cur.push(s); };
+  for (let l of lines.map(s=>s.trim()).filter(Boolean)) { while (l.length > MAX) { const k = l.lastIndexOf(". ", MAX), cut = k > 200 ? k + 1 : MAX; add(l.slice(0, cut).trim()); l = l.slice(cut).trim(); } add(l); }
+  if (cur.length || !parts.length) parts.push(cur);
+  const n = parts.length;
+  return parts.map((p, i) => ["loot", { name: `${x.name || (cat==="feats" ? "A feat" : "A background")}${n > 1 ? ` (${i+1} of ${n})` : ""}`, kind: cat==="feats" ? `${x.type||"General"} feat` : "Background",
+    desc: p.join("\n"), value: cat==="feats" && x.prereq ? `Prerequisite: ${x.prereq}` : "" }]);
 }
 function itemForm(x){
   const guess = rarityGuess(x.rarity, x.kind==="potion");
@@ -557,7 +654,7 @@ let lastText = "";
    are here too, and the Field Book keeps its own file in that gist. Entry by entry, the newer copy wins (fbEdited);
    a deletion leaves a mark (db.deleted) that travels; the campaigns it knows are joined. Theme, the roller and the
    campaign filter stay on each device. Sending to the survey is unchanged. ══ */
-const SYNC_KEY = "character-book:sync", FB_FILE = "field-book-sync.json", SYNC_DESC = "Character Book sync", SYNC_CATS = ["loot","npcs","spells","shops","factions","backgrounds","tables"];
+const SYNC_KEY = "character-book:sync", FB_FILE = "field-book-sync.json", SYNC_DESC = "Character Book sync", SYNC_CATS = ["loot","npcs","spells","shops","factions","backgrounds","tables","classes","subclasses","feats"];
 const syncCfg = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); } catch (e) { return null; } };
 const setSyncCfg = v => { try { if (v) localStorage.setItem(SYNC_KEY, JSON.stringify(v)); else localStorage.removeItem(SYNC_KEY); } catch (e) {} };
 const stampOf = x => (x && (x.fbEdited || x.fbMade)) || 0;
@@ -682,6 +779,7 @@ view.addEventListener("input", e => {
   /* a stat block by name: the SRD's own, matched as you type */
   if (t.dataset.fname != null) { const v = t.value.trim(), m = Survey.SRD_FOES.find(f=>f.name.toLowerCase()===v.toLowerCase()); x.fightsAs = m ? m.id : (v || "block"); touch(x); return; }
   if (t.dataset.compmat != null) { const p = Survey.compParts(x.comp); p.mat = t.value.trim(); x.comp = Survey.compText(p); touch(x); return; }
+  if (t.dataset.fp != null) { if (t.type!=="checkbox" && t.tagName!=="SELECT") { setP(x, t.dataset.fp, t.type==="number" ? (t.value==="" ? "" : +t.value) : t.value); touch(x); } return; }
   const k = t.dataset.f; if (!k || t.type==="checkbox" || t.tagName==="SELECT") return;
   setField(x, k, t.value); touch(x);
   const md = view.querySelector(`[data-mod="${k}"]`); if (md) { const v = parseInt(t.value); md.textContent = isFinite(v) ? Survey.abMod(v) : ""; }
@@ -703,6 +801,9 @@ view.addEventListener("change", e => {
     else if (v==="__other") { x.featureOther = true; if (fbFeatureOpts(x).some(o=>o.name===x.featureName)) { delete x.featureName; delete x.featureText; } }
     else { const o = fbFeatureOpts(x).find(q=>q.name===v); if (v) { x.featureName = v; x.featureText = o ? o.desc : ""; } else { delete x.featureName; delete x.featureText; } delete x.featureOther; }
     touch(x); render(); return; }
+  if (t.dataset.fp != null) { if (t.type==="checkbox" || t.tagName==="SELECT") { setP(x, t.dataset.fp, t.type==="checkbox" ? t.checked : t.value); touch(x); render(); } return; }
+  if (t.dataset.fpm != null) { const p = t.dataset.fpm, s = new Set(getP(x, p)||[]); if (t.checked) s.add(t.dataset.v); else s.delete(t.dataset.v); setP(x, p, FB_ABS.concat(FB_SKILLS).map(q=>q[0]).filter(v=>s.has(v))); touch(x); return; }
+  if (t.dataset.fxadd != null) { if (t.value) { const p = t.dataset.fxadd; if (!Array.isArray(getP(x, p))) setP(x, p, []); getP(x, p).push({ t:t.value, ...JSON.parse(JSON.stringify(FB_FX_NEW[t.value]||{})) }); touch(x); render(); } return; }
   if (t.dataset.multi != null) { const k = t.dataset.multi, s = new Set(x[k]||[]); if (t.checked) s.add(t.dataset.v); else s.delete(t.dataset.v); if (s.size) x[k] = [...s]; else delete x[k]; touch(x); return; }
   if (t.dataset.soldat != null) { const s = new Set(x.soldAt||[]); if (t.checked) s.add(t.dataset.soldat); else s.delete(t.dataset.soldat); if (s.size) x.soldAt = [...s]; else delete x.soldAt; touch(x); render(); return; }
   if (t.dataset.shopfrom != null) { const S = Survey.SHOP_TEMPLATES[t.value]; if (!S) return;
@@ -750,9 +851,11 @@ view.addEventListener("click", e => {
     fetch("https://api.github.com/gists?per_page=1", { headers:{ Accept:"application/vnd.github+json", Authorization:`Bearer ${tk}` } })
       .then(r => { if (!r.ok) throw new Error(r.status); setSyncCfg({ token:tk }); render(); doSync(); })
       .catch(() => toast("GitHub didn't take that token: check Gists is set to Read and write.")); return; }
+  if (a==="fpadd" && x) { const p = b.dataset.p; if (!Array.isArray(getP(x, p))) setP(x, p, []); getP(x, p).push(FB_TPL[b.dataset.tpl](x)); touch(x); render(); return; }
+  if (a==="fpdel" && x) { const L = getP(x, b.dataset.p); if (Array.isArray(L) && confirm("Take this out?")) { L.splice(+b.dataset.i, 1); touch(x); render(); } return; }
   if (a==="rcat") { ui.rcat = b.dataset.v; ui.q = ""; render(); return; }
   if (a==="tblroll" && x) { const p = parseTable(x.text); if (!p.rows.length) { toast("No rows yet."); return; } const k = 1 + Math.floor(Math.random() * p.die), r = p.rows.find(q => k >= q.lo && k <= q.hi); const o = $("#tblTry"); if (o) o.innerHTML = `<p class="note"><b>d${p.die}: ${k}.</b> ${esc(r ? r.text : "No row for that number.")}</p>`; return; }
-  if (a==="new") { const cat = curCat(); ui.draft = { cat, x: cat==="backgrounds" ? { id:uid("lbg"), name:"" } : cat==="tables" ? { id:uid("ltb"), name:"", text:"" } : cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : cat==="factions" ? { id:uid("lfa"), name:"", align:"", standing:0 } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
+  if (a==="new") { const cat = curCat(); ui.draft = { cat, x: cat==="backgrounds" ? { id:uid("lbg"), name:"" } : cat==="tables" ? { id:uid("ltb"), name:"", text:"" } : cat==="classes" ? { id:uid("lcl"), name:"", hd:"8", saves:[], skillsN:"2", subAt:"3", asi:"4, 8, 12, 16, 19", cols:[], features:[] } : cat==="subclasses" ? { id:uid("lsb"), name:"", features:[] } : cat==="feats" ? { id:uid("lft"), name:"", type:"General", fx:[] } : cat==="loot" ? { id:uid("ll"), name:"", kind:"curio" } : cat==="spells" ? Object.assign(Survey.blankLib("spells"), { id:uid("lsp"), name:"" }) : cat==="shops" ? { id:uid("lsh"), name:"", keeper:"merchant", nmin:"4", nmax:"6" } : cat==="factions" ? { id:uid("lfa"), name:"", align:"", standing:0 } : { id:uid("ln"), name:"" } }; ui.open = null; render(); scrollTo(0, 0);
     const n = view.querySelector('[data-f="name"]'); if (n) n.focus(); return; }
   if (a==="back") { ui.draft = null; ui.open = null; save(true); render(); return; }
   if (a==="card" && x) { showCard(ui.draft ? ui.draft.cat : ui.tab, x); return; }
@@ -780,8 +883,8 @@ view.addEventListener("click", e => {
   if (a==="copy") return void copyText();
   if (a==="import") { $("#fileIn").click(); return; }
   if (a==="wipe") { if (!confirm(`Delete every item and person on this phone? Anything not sent is gone for good.${syncCfg() ? " With Sync on, they're deleted on your other devices too, the next time each one syncs." : ""}`) || !confirm("Really delete everything?")) return;
-    const now = Date.now(); for (const y of [...allEntries(), ...db.backgrounds, ...db.tables]) db.deleted[y.id] = Math.max(now, (y.fbEdited || 0) + 1);
-    db.loot = []; db.npcs = []; db.spells = []; db.shops = []; db.factions = []; db.backgrounds = []; db.tables = []; save(true); render(); toast("Emptied."); return; }
+    const now = Date.now(); for (const y of [...allEntries(), ...RULE_CATS.flatMap(c => db[c])]) db.deleted[y.id] = Math.max(now, (y.fbEdited || 0) + 1);
+    db.loot = []; db.npcs = []; db.spells = []; db.shops = []; db.factions = []; for (const c of RULE_CATS) db[c] = []; save(true); render(); toast("Emptied."); return; }
 });
 $("#fileIn").onchange = e => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => bringIn(String(r.result||"")); r.readAsText(f); e.target.value = ""; };
 $("#tabs").onclick = e => { const b = e.target.closest("[data-tab]"); if (!b) return;
