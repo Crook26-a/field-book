@@ -1,4 +1,4 @@
 1. a feat, with a change to the sheet: Test Knack: Origin; fx [{"t":"skill","k":"athletics","lv":1}]
 2. its card, and a long background's cards: the feat: 1 card; the long background: 2 cards (test-wanderer-1-of-2-card.png, test-wanderer-2-of-2-card.png)
 3. a subclass and a class, with features by level: Test Path (Fighter · 1 feature): [{"level":3,"name":"Test Surge","text":"","fx":[{"t":"res","name":"Test Surge","n":1,"by":"","ab":"wis","rest":"long"}]}] | Test Warden (d8 · half caster · 1 feature): cols [{"name":"Wards","first":"2","use":true}]
-4. Sync carries them; the Rules tab counts them: Sync: loot, npcs, spells, shops, factions, backgrounds, tables, classes, subclasses, feats; Rules tab: Rules4
+4. Sync carries them; the Rules tab counts them: Sync: loot, npcs, spells, shops, factions, backgrounds, races, tables, classes, subclasses, feats; Rules tab: Rules4

@@ -1,0 +1,3 @@
+1. a race, made with the form: a subrace, an increase, a trait with a change: Test Glade Gnome: a subrace of Gnome · Dex +1 · 1 trait | {"of":"Gnome","bonus":{"dex":1},"languages":"Sylvan","features":[{"level":1,"name":"Test Leafstep","text":"You move quietly through leaves.","fx":[{"t":"speed","n":10}]}]}
+2. its card: 1 card (test-glade-gnome-card.png): Subrace of Gnome | A subrace of Gnome. / Ability scores: Dex +1 / Languages: Sylvan / Test Leafstep: You move quietly through leaves.
+3. one the Character Book moves here comes in while it's open: feats: Test Moved Feat; races kept: Test Glade Gnome; Sync: loot, npcs, spells, shops, factions, backgrounds, races, tables, classes, subclasses, feats; Rules tab: Rules2
