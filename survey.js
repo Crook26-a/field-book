@@ -1,4 +1,4 @@
-/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-11-04 14:54). Don't edit by hand:
+/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-11-04 15:24). Don't edit by hand:
    change the survey and build again. 190 pieces of the survey's code and the SRD 5.2 data. */
 const Survey = (() => {
 "use strict";
@@ -834,6 +834,72 @@ const PEOPLE_KINDS = {
     secret:["the ship is mortgaged to a moneylender","once abandoned a crew to save the ship","sails under a false name"],
     knows:["every port and its harbormaster","the trade winds and the dangers","which cargoes pay and which get you hanged"],
     carries:["Longsword","Spyglass"], quirk:["never sleeps more than four hours","takes every meal on deck","keeps a lucky coin from their first command"] },
+  /* a passenger ship's people (Joseph, 2026-11-04): her hospitality staff, her guards and chaplain, and passengers in
+     three fares */
+  steward:{ label:"Steward", group:"Sea and docks", cls:"Commoner", blocks:["Commoner"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:1,
+    titles:["Steward","Stewardess","Cabin steward","Chief steward","Saloon steward"],
+    look:["a white jacket, pressed even at sea","a towel over one arm, always","a professional smile that never slips","sea legs so steady they never spill a drop"],
+    voice:["'very good, sir' to everything","murmurs, never raises their voice","remembers your name from the manifest"],
+    wants:["a generous tip at the end of the voyage","a cabin of their own one day","the first-class passengers to stop ringing","to be chief steward"],
+    secret:["reads the passengers' letters","sells gossip about the first-class cabins","is hiding from someone ashore"],
+    knows:["who's in which cabin and why","which passengers drink","who isn't who they say they are"],
+    carries:["Clothes, fine"], quirk:["folds anything left lying about","hums while making beds","can't stop straightening things"] },
+  purser:{ label:"Purser", group:"Sea and docks", cls:"Rogue", blocks:["Commoner","Spy"], disp:{ ally:3, neutral:6, enemy:1 }, wealth:2,
+    titles:["Purser","Purser's mate"],
+    look:["a strongbox key on a chain","spectacles and a pencil behind the ear","a ledger under one arm","a waistcoat with too many pockets"],
+    voice:["talks fares and fees","polite to first class, brisk to steerage","quotes the passenger regulations"],
+    wants:["the manifest to tally","a passenger who pays extra for a better cabin","the ship's strongbox safe","a share in the company"],
+    secret:["sells berths twice","keeps a passenger's valuables 'safe' for good","knows which passenger is travelling under a false name"],
+    knows:["every passenger's name, fare and cabin","what's in the ship's strongbox","which cabins are empty"],
+    carries:["Book","Ink Pen","Dagger"], quirk:["counts the silverware after every meal","writes everything down twice","jingles their keys when thinking"] },
+  waiter:{ label:"Ship's waiter", group:"Sea and docks", cls:"Commoner", blocks:["Commoner"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:0,
+    titles:["Waiter","Waitress","Saloon boy","Galley hand","Cook's mate"],
+    look:["an apron with a soup stain","quick hands and a tray balanced high","young and green about the gills","a cloth over one shoulder"],
+    voice:["recites the menu in a single breath","whispers the kitchen gossip","apologises for the weather as if it's their fault"],
+    wants:["their tips to add up","a job ashore in a good inn","to see the islands","not to drop anything in front of the captain"],
+    secret:["eats the first-class leftovers","is sweet on a passenger","overheard something at the captain's table"],
+    knows:["who sits with whom at dinner","what the first-class passengers argue about","the cook's best and worst dishes"],
+    carries:["Mess Kit"], quirk:["never spills, even in a storm","taste-tests everything","knows every passenger's order by heart"] },
+  shipguard:{ label:"Ship's guard", group:"Sea and docks", cls:"Fighter", blocks:["Guard","Warrior Infantry","Warrior Veteran"], disp:{ ally:3, neutral:6, enemy:1 }, wealth:1,
+    titles:["Ship's guard","Ship's guard","Master-at-arms","Guard of the strongroom"],
+    look:["a cutlass and a cudgel, both used","broad and quiet at the stairhead","a company badge on a leather coat","scarred knuckles, gentle manners"],
+    voice:["few words, all of them polite","calls passengers 'ma'am' and 'sir', pirates other things","tells the same story about the last pirate who tried"],
+    wants:["a dull voyage","the passengers safe and the strongbox safer","a bonus at the end of the run","to settle ashore when the pay runs out"],
+    secret:["once let pirates aboard for a share","is sweet on a passenger","was a pirate before this"],
+    knows:["the ship's defences and its weak spots","who's carrying a weapon aboard","the signal for trouble"],
+    carries:["Scimitar","Club"], quirk:["checks every door at night","always stands with their back to the rail","polishes their blade during dinner"] },
+  chaplain:{ label:"Ship's chaplain", group:"Sea and docks", cls:"Cleric", blocks:["Priest Acolyte","Priest"], disp:{ ally:5, neutral:4, enemy:1 }, wealth:1,
+    titles:["Ship's chaplain","Ship's healer","Sea-priest"],
+    look:["salt-stained vestments","a holy symbol of the sea god on a cord","calm when everyone else is seasick","a bag of bandages and prayer beads"],
+    voice:["blesses every meal and every wind","quietly reassuring","talks to the sea as if it can hear"],
+    wants:["no one buried at sea this voyage","the passengers to come to prayers","the crew to stop gambling","a chapel in a port town"],
+    secret:["lost their faith once in a storm and found it again","heals the guards first in a fight, whatever the vows say","took a passenger's last confession and knows a crime"],
+    knows:["every passenger's troubles","the sea's omens","the guards' rota, and their wounds"],
+    carries:["Mace","Holy Symbol","Healer's Kit"], quirk:["blesses the ship every morning","keeps a candle lit below decks","sings hymns in a storm"] },
+  passlow:{ label:"Passenger (low class)", group:"Sea and docks", cls:"Commoner", blocks:["Commoner"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:0,
+    titles:["Emigrant","Pilgrim","Labourer seeking work","Farmhand going home","Deckhand working their passage","Widow and her bundle","Indentured servant"],
+    look:["everything they own in one bundle","patched clothes and good boots","a family keepsake held tight","seasick and determined"],
+    voice:["talks about where they're going, not where they've been","wary of the first-class passengers","sings in the bunks at night"],
+    wants:["a new start where they're going","their bundle safe","a bunk away from the hatch","to see land again"],
+    secret:["is running from a debt","has stowed a sibling away","is carrying something for someone else"],
+    knows:["what the steerage passengers whisper","who stole the bread","the gossip from the port they left"],
+    carries:["Clothes, travelers"], quirk:["counts the days on a knotted string","shares their food with anyone","never sleeps without a hand on their bundle"] },
+  passmid:{ label:"Passenger (middle class)", group:"Sea and docks", cls:"Commoner", blocks:["Commoner","Noble"], disp:{ ally:3, neutral:6, enemy:1 }, wealth:2,
+    titles:["Merchant","Clerk on company business","Craftsman","Scholar","Physician","Minor official","Merchant's widow","Travelling player"],
+    look:["a good coat a little worn","a trunk with their name painted on it","a case of samples","respectable and anxious to look it"],
+    voice:["talks business at dinner","polite and a little proud","complains about the cabin, gently"],
+    wants:["their business done in the next port","to be invited to the captain's table","a first-class acquaintance","their trunk unopened"],
+    secret:["the samples aren't what they say","travels on borrowed money","is meeting a lover in the next port"],
+    knows:["the prices in the port they left","a little of everything","who in first class owes money"],
+    carries:["Clothes, travelers","Purse"], quirk:["writes letters every evening","keeps their trunk under the bunk and checks it","always dresses for dinner"] },
+  passfirst:{ label:"Passenger (first class)", group:"Sea and docks", cls:"Noble", blocks:["Noble"], disp:{ ally:2, neutral:5, enemy:3 }, wealth:5,
+    titles:["Noble","Wealthy merchant","Lady of means","Company director","Ambassador","Heir to a fortune","Retired admiral"],
+    look:["silk that wasn't made for the sea","a servant's worth of luggage","rings and a pocket-watch","perfume that reaches the next cabin"],
+    voice:["expects to be listened to","talks over the stewards","charming to equals, cool to everyone else"],
+    wants:["the voyage over quickly","a cabin on the windward side","the captain's table, every night","nothing below decks to come near them"],
+    secret:["the fortune is mostly debts","is travelling to a duel, or a wedding, or a trial","carries a sealed letter that could start a war"],
+    knows:["the politics of the ports","who owns the ship","which families are rising and falling"],
+    carries:["Clothes, fine","Signet Ring","Purse"], quirk:["dresses for dinner, three times","tips in gold or not at all","keeps a lapdog in the cabin"] },
   councillor:{ label:"Councillor", group:"Power and law", cls:"Noble", blocks:["Noble"], disp:{ ally:3, neutral:4, enemy:3 }, wealth:4,
     look:["a chain of office and a fur-trimmed robe","a politician's smile that never reaches the eyes","rings of the guilds they owe","silver hair, carefully arranged"],
     voice:["never answers a question directly","speaks as if to a crowd","drops names constantly"],
@@ -1022,7 +1088,8 @@ function genPerson(over){
   if(o.type && o.type!=="Humanoid") return genCreature(o);          // a beast, a dragon, a fiend… met as someone
   const lv = clampLv(o.level || partyAvgLevel()), K = o.kind && PEOPLE_KINDS[o.kind];
   const disp = o.disp || (K ? pickWeighted(K.disp) : pickOne(["enemy","neutral","ally"]));
-  const cls = K ? K.cls : pickClass(o.role, disp), names = K ? K.blocks : CLASS_BLOCKS[cls] || CLASS_BLOCKS.Commoner;
+  /* o.cls: a class asked for (a ship's crew, 2026-11-04: "level 2 fighters"), over the kind's own; the kind keeps the looks */
+  const cls = o.cls || (K ? K.cls : pickClass(o.role, disp)), names = o.cls ? (CLASS_BLOCKS[o.cls] || (K ? K.blocks : CLASS_BLOCKS.Commoner)) : K ? K.blocks : CLASS_BLOCKS[cls] || CLASS_BLOCKS.Commoner;
   const all = SRD_FOES.filter(f=>names.includes(f.name));
   const pool = all.filter(f=>f.cr <= lv && (!o.maxXp || f.xp <= o.maxXp));
   const near = pool.filter(f=>f.cr >= lv/4);                      // something that can matter at this level
