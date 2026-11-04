@@ -634,6 +634,7 @@ function personForm(x){
     <label class="fld"><span>Alignment</span><div class="with"><select data-f="align"><option value="">—</option>${[...ALIGNMENTS,"Unaligned"].map(a=>`<option ${a===x.align?"selected":""}>${a}</option>`).join("")}</select><button class="btn dice" data-roll="align" aria-label="Roll an alignment">🎲</button></div></label>
     ${TA(x,"look","Look","Big laugh, strong arms…",2,"look")}
     ${TA(x,"voice","Voice","Calls everyone “minnow”",2,"voice")}
+    ${TA(x,"quirk","Quirk","Won't whistle aboard ship",1,"quirk")}
     ${TA(x,"wants","Wants","",2,"wants")}
     ${TA(x,"knows","Knows (or hides)","A secret, a rumor, a way in…",2,"knows")}
     ${TA(x,"tactics","Tactics: how they fight (DM only)","Wades in front, picks the biggest threat and holds the line…",2)}
@@ -866,6 +867,7 @@ view.addEventListener("click", e => {
     else if (r==="align") x.align = rollAlignment(ui.disp);
     else if (r==="look") x.look = cap(pickOne(fitList(T.look, sexOf(x))));
     else if (r==="voice") x.voice = cap(pickOne(T.voice));
+    else if (r==="quirk") x.quirk = cap(pickOne(T.quirk && T.quirk.length ? T.quirk : ["hums when thinking"]));     // the survey's quirk lists (2026-11-04)
     else if (r==="wants") x.wants = cap(pickOne(T.wants[d]));
     else if (r==="knows") x.knows = cap(pickOne(T.secret));
     else if (r==="backstory") x.backstory = Survey.genBackstory(T);
