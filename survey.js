@@ -1,4 +1,4 @@
-/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-11-04 15:24). Don't edit by hand:
+/* survey.js: made by Ordinate Survey's Tools\build-fieldbook.ps1 from its index.html (2026-11-05 14:05). Don't edit by hand:
    change the survey and build again. 190 pieces of the survey's code and the SRD 5.2 data. */
 const Survey = (() => {
 "use strict";
@@ -876,6 +876,23 @@ const PEOPLE_KINDS = {
     secret:["lost their faith once in a storm and found it again","heals the guards first in a fight, whatever the vows say","took a passenger's last confession and knows a crime"],
     knows:["every passenger's troubles","the sea's omens","the guards' rota, and their wounds"],
     carries:["Mace","Holy Symbol","Healer's Kit"], quirk:["blesses the ship every morning","keeps a candle lit below decks","sings hymns in a storm"] },
+  /* an explorer ship's specialists (Joseph, 2026-11-05) */
+  cartographer:{ label:"Cartographer", group:"Sea and docks", cls:"Wizard", blocks:["Commoner","Mage"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:2,
+    titles:["Cartographer","Map-maker","Chart-master","Surveyor"],
+    look:["ink to the elbows","a roll of charts under one arm","squints at every coastline","a brass compass on a chain"],
+    voice:["measures everything aloud","corrects other people's maps, politely","talks of 'the blank parts' with longing"],
+    wants:["a coast no one has drawn","the Guild's prize for a new chart","better instruments","their name on a cape or a bay"],
+    secret:["copied a rival's chart and sold it as their own","knows a sea lane the Guild doesn't","drew a reef in the wrong place, and a ship was lost"],
+    knows:["every chart in the Guild's archive","the depths off a dozen harbours","which maps are lies"],
+    carries:["Cartographer's Tools","Ink","Paper"], quirk:["sketches everyone's face in the margins","names islands after their cats","won't sail without their lucky compass"] },
+  naturalist:{ label:"Naturalist", group:"Sea and docks", cls:"Druid", blocks:["Commoner","Druid","Priest Acolyte"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:1,
+    titles:["Naturalist","Botanist","Collector of curiosities","Beast-scholar"],
+    look:["specimen jars clinking in a satchel","sunburnt and delighted","a butterfly net, always","burrs on every hem"],
+    voice:["Latin names for everything","forgets to be afraid of anything with scales","describes a sea monster as 'magnificent'"],
+    wants:["a beast no one has named","seeds of every island's flowers","to be taken seriously by the Guild","to go ashore, now"],
+    secret:["is smuggling a live egg in the hold","was expelled from the academy","has eaten something they shouldn't have, and feels odd"],
+    knows:["which plants heal and which kill","what the birds mean about the weather","the habits of sea serpents"],
+    carries:["Herbalism Kit","Book"], quirk:["talks to the specimens","collects everything, including the inedible","sleeps on deck to watch the birds"] },
   passlow:{ label:"Passenger (low class)", group:"Sea and docks", cls:"Commoner", blocks:["Commoner"], disp:{ ally:4, neutral:5, enemy:1 }, wealth:0,
     titles:["Emigrant","Pilgrim","Labourer seeking work","Farmhand going home","Deckhand working their passage","Widow and her bundle","Indentured servant"],
     look:["everything they own in one bundle","patched clothes and good boots","a family keepsake held tight","seasick and determined"],
